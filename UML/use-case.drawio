@@ -1,0 +1,62 @@
+@startuml
+
+left to right direction
+
+actor Student
+actor RevenueCat
+
+rectangle "StudyFlow AI" {
+
+    usecase "Register" as UC1
+    usecase "Login" as UC2
+    usecase "Manage Profile" as UC3
+
+    usecase "Manage Semesters" as UC4
+    usecase "Manage Courses" as UC5
+    usecase "Manage Deadlines" as UC6
+    usecase "Manage Study Availability" as UC7
+
+    usecase "Generate Study Plan" as UC8
+    usecase "View Study Plan" as UC9
+
+    usecase "Start Study Session" as UC10
+    usecase "Complete Study Session" as UC11
+    usecase "Skip Study Session" as UC12
+
+    usecase "Reschedule Study Plan" as UC13
+
+    usecase "View Progress" as UC14
+
+    usecase "View Premium Plans" as UC15
+    usecase "Purchase Premium" as UC16
+    usecase "Restore Purchase" as UC17
+}
+
+Student --> UC1
+Student --> UC2
+Student --> UC3
+
+Student --> UC4
+Student --> UC5
+Student --> UC6
+Student --> UC7
+
+Student --> UC8
+Student --> UC9
+
+Student --> UC10
+Student --> UC11
+Student --> UC12
+
+UC12 ..> UC13 : <<include>>
+
+Student --> UC14
+
+Student --> UC15
+Student --> UC16
+Student --> UC17
+
+RevenueCat --> UC16
+RevenueCat --> UC17
+
+@enduml
