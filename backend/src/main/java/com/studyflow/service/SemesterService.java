@@ -4,6 +4,7 @@ import com.studyflow.dto.request.SemesterCreateRequest;
 import com.studyflow.dto.response.SemesterResponse;
 import com.studyflow.entity.Semester;
 import com.studyflow.entity.User;
+import com.studyflow.exception.UserNotFoundException;
 import com.studyflow.repository.SemesterRepository;
 import com.studyflow.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,21 +22,19 @@ public class SemesterService {
             SemesterCreateRequest request) {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                .orElseThrow(UserNotFoundException::new);
 
         if (semesterRepository.existsByUserAndNameIgnoreCase(
                 user,
                 request.getName())) {
 
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     "Semester already exists");
         }
 
         if (request.getEndDate()
                 .isBefore(request.getStartDate())) {
-
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     "End date must be after start date");
         }
 

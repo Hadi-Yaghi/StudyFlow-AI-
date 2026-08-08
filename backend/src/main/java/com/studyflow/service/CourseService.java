@@ -5,6 +5,8 @@ import com.studyflow.dto.response.CourseResponse;
 import com.studyflow.entity.Course;
 import com.studyflow.entity.Semester;
 import com.studyflow.entity.User;
+import com.studyflow.exception.SemesterNotFoundException;
+import com.studyflow.exception.UserNotFoundException;
 import com.studyflow.repository.CourseRepository;
 import com.studyflow.repository.SemesterRepository;
 import com.studyflow.repository.UserRepository;
@@ -24,12 +26,10 @@ public class CourseService {
             CourseCreateRequest request) {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                .orElseThrow(UserNotFoundException::new);
 
         Semester semester = semesterRepository.findById(request.getSemesterId())
-                .orElseThrow(() ->
-                        new RuntimeException("Semester not found"));
+                .orElseThrow(SemesterNotFoundException::new);
 
         if (!semester.getUser().getId().equals(user.getId())) {
             throw new RuntimeException("You do not own this semester");
@@ -39,7 +39,8 @@ public class CourseService {
                 semester,
                 request.getName())) {
 
-            throw new RuntimeException("Course already exists");
+            throw new IllegalArgumentException(
+                    "Course already exists");
         }
 
         Course course = Course.builder()

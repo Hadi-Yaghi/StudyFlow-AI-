@@ -4,7 +4,10 @@ import com.studyflow.dto.request.TaskCreateRequest;
 import com.studyflow.dto.response.TaskResponse;
 import com.studyflow.entity.Course;
 import com.studyflow.entity.Task;
+import com.studyflow.entity.TaskStatus;
 import com.studyflow.entity.User;
+import com.studyflow.exception.CourseNotFoundException;
+import com.studyflow.exception.UserNotFoundException;
 import com.studyflow.repository.CourseRepository;
 import com.studyflow.repository.TaskRepository;
 import com.studyflow.repository.UserRepository;
@@ -24,22 +27,22 @@ public class TaskService {
             TaskCreateRequest request) {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                .orElseThrow(UserNotFoundException::new);
 
         Course course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() ->
-                        new RuntimeException("Course not found"));
+                .orElseThrow(CourseNotFoundException::new);
 
         if (!course.getSemester().getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("You do not own this course");
+            throw new IllegalArgumentException(
+                    "You do not own this course");
         }
 
         if (taskRepository.existsByCourseAndTitleIgnoreCase(
                 course,
                 request.getTitle())) {
 
-            throw new RuntimeException("Task already exists");
+            throw new IllegalArgumentException(
+                    "Task already exists");
         }
 
         Task task = Task.builder()
@@ -49,7 +52,8 @@ public class TaskService {
                 .priority(request.getPriority())
                 .dueDate(request.getDueDate())
                 .estimatedHours(request.getEstimatedHours())
-                .completed(false)
+                .completedHours(0)
+                .status(TaskStatus.TODO)
                 .course(course)
                 .build();
 
@@ -63,7 +67,8 @@ public class TaskService {
                 .priority(saved.getPriority())
                 .dueDate(saved.getDueDate())
                 .estimatedHours(saved.getEstimatedHours())
-                .completed(saved.isCompleted())
+                .completedHours(saved.getCompletedHours())
+                .status(saved.getStatus())
                 .courseId(saved.getCourse().getId())
                 .build();
     }

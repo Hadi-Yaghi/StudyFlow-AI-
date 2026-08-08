@@ -1,6 +1,7 @@
 package com.studyflow.dto.response;
 
 import com.studyflow.entity.TaskPriority;
+import com.studyflow.entity.TaskStatus;
 import com.studyflow.entity.TaskType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,7 +30,9 @@ public class TaskResponse {
 
     private Integer estimatedHours;
 
-    private boolean completed;
+    private Integer completedHours;
+
+    private TaskStatus status;
 
     private Long courseId;
 }
