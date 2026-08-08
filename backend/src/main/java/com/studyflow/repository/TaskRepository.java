@@ -28,4 +28,5 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
             Course course,
             String title
     );
+    List<Task> findByCourseIn(List<Course> courses);
 }

@@ -11,6 +11,8 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     List<Course> findBySemester(Semester semester);
 
+    List<Course> findBySemesterIn(List<Semester> semesters);
+
     Optional<Course> findBySemesterAndNameIgnoreCase(
             Semester semester,
             String name
