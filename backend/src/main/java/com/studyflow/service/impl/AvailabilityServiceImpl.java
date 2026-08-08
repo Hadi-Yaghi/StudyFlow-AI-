@@ -1,4 +1,4 @@
-package com.studyflow.service;
+package com.studyflow.service.impl;
 
 import com.studyflow.dto.availability.AvailabilityRequest;
 import com.studyflow.dto.availability.AvailabilityResponse;
