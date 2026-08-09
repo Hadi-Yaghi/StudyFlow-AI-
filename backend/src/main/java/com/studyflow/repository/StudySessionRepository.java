@@ -19,10 +19,10 @@ public interface StudySessionRepository
     List<StudySession> findBySessionDateOrderByStartTime(
             LocalDate sessionDate
     );
-
-    void deleteByTaskInAndStatusNot(List<Task> tasks,
-
-                                    StudySessionStatus status);
+    void deleteByTaskInAndStatusNotIn(
+            List<Task> tasks,
+            List<StudySessionStatus> statuses
+    );
     List<StudySession> findBySessionDateAndEndTimeBeforeAndStatus(
             LocalDate sessionDate,
             LocalTime endTime,

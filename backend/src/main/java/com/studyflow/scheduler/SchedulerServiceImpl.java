@@ -55,7 +55,13 @@ public class SchedulerServiceImpl implements SchedulerService {
         List<Task> tasks =
                 taskRepository.findByCourseIn(courses);
         // Remove previously generated sessions for these tasks
-        studySessionRepository.deleteByTaskInAndStatusNot(tasks,StudySessionStatus.COMPLETED);
+        studySessionRepository.deleteByTaskInAndStatusNotIn(
+                tasks,
+                List.of(
+                        StudySessionStatus.COMPLETED,
+                        StudySessionStatus.MISSED
+                )
+        );
         List<StudySession> generatedSessions =
                 new ArrayList<>();
 
