@@ -4,7 +4,7 @@ import com.studyflow.entity.*;
 import com.studyflow.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -26,6 +26,7 @@ public class SchedulerServiceImpl implements SchedulerService {
     private final SessionGenerator sessionGenerator;
 
     @Override
+    @Transactional
     public SchedulerResult generateSchedule(String email) {
 
         User user = userRepository.findByEmail(email)
@@ -53,14 +54,8 @@ public class SchedulerServiceImpl implements SchedulerService {
         // Get all tasks belonging to those courses
         List<Task> tasks =
                 taskRepository.findByCourseIn(courses);
-        System.out.println("=== SCHEDULER DEBUG ===");
-        System.out.println("User: " + user.getEmail());
-        System.out.println("Semesters: " + semesters.size());
-        System.out.println("Courses: " + courses.size());
-        System.out.println("Tasks: " + tasks.size());
-        System.out.println("Availability: " + availabilities.size());
-        System.out.println("Preferences: " + preferences);
-
+        // Remove previously generated sessions for these tasks
+        studySessionRepository.deleteByTaskInAndStatusNot(tasks,StudySessionStatus.COMPLETED);
         List<StudySession> generatedSessions =
                 new ArrayList<>();
 
@@ -90,10 +85,7 @@ public class SchedulerServiceImpl implements SchedulerService {
                                             .name()
                                             .equals(dayOfWeek.name()))
                             .toList();
-            System.out.println(
-                    "Availability blocks for " + dayOfWeek
-                            + ": " + dailyAvailability.size()
-            );
+
             for (Availability availability : dailyAvailability) {
 
                 List<TimeAllocator.TimeBlock> blocks =
@@ -154,4 +146,5 @@ public class SchedulerServiceImpl implements SchedulerService {
                 .unscheduledMinutes(unscheduledMinutes)
                 .build();
     }
+
 }

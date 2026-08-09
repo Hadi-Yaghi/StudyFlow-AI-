@@ -1,10 +1,12 @@
 package com.studyflow.repository;
 
 import com.studyflow.entity.StudySession;
+import com.studyflow.entity.StudySessionStatus;
 import com.studyflow.entity.Task;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 public interface StudySessionRepository
@@ -16,5 +18,14 @@ public interface StudySessionRepository
 
     List<StudySession> findBySessionDateOrderByStartTime(
             LocalDate sessionDate
+    );
+
+    void deleteByTaskInAndStatusNot(List<Task> tasks,
+
+                                    StudySessionStatus status);
+    List<StudySession> findBySessionDateAndEndTimeBeforeAndStatus(
+            LocalDate sessionDate,
+            LocalTime endTime,
+            StudySessionStatus status
     );
 }
