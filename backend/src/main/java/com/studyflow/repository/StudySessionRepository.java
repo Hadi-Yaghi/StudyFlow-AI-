@@ -28,4 +28,7 @@ public interface StudySessionRepository
             LocalTime endTime,
             StudySessionStatus status
     );
+    List<StudySession> findByStatusAndRescheduledFalse(
+            StudySessionStatus status
+    );
 }

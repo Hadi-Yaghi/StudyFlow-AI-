@@ -42,4 +42,9 @@ public class StudySession extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "task_id", nullable = false)
     private Task task;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean rescheduled = false;
+
 }
