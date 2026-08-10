@@ -95,14 +95,7 @@ public class MissedSessionReschedulingServiceImpl
 
             if (totalAvailableMinutes < remainingMinutes) {
 
-                System.out.println(
-                        "Not enough availability to reschedule session "
-                                + missedSession.getId()
-                                + ". Required: "
-                                + remainingMinutes
-                                + " minutes, available: "
-                                + totalAvailableMinutes
-                );
+
 
                 continue;
             }
@@ -156,13 +149,7 @@ public class MissedSessionReschedulingServiceImpl
                     missedSession
             );
 
-            System.out.println(
-                    "Rescheduled missed session "
-                            + missedSession.getId()
-                            + " into "
-                            + replacementSessions.size()
-                            + " new session(s)."
-            );
+
         }
     }
 
