@@ -12,18 +12,21 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
+  bool ispasswordHidden = true;
   bool agreedtoTerms = false;
   TextEditingController nameController = TextEditingController();
   TextEditingController emailController = TextEditingController();
   TextEditingController passwordController = TextEditingController();
-
+  TextEditingController confirmPasswordController = TextEditingController( );
+  GlobalKey<FormState> formKey = GlobalKey();
   bool hasMinlength = false;
   bool hasUppercase = false;
   bool hasLowercase = false;
   bool hasNumber = false;
   bool hasSpecialCharacter = false;
-  bool ispasswordfocus = true;
+  bool ispasswordfocus = false;
   FocusNode passwordFocuseNode = FocusNode();
+  bool showTermsError = false; 
   int strength = 0;
   @override
   void initState() {
@@ -52,7 +55,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     });
     passwordFocuseNode.addListener(() {
       setState(() {
-        if (ispasswordfocus) {
+        if (!ispasswordfocus) {
           ispasswordfocus = passwordFocuseNode.hasFocus;
         }
       });
@@ -64,6 +67,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     nameController.dispose();
     emailController.dispose();
     passwordController.dispose();
+    passwordFocuseNode.dispose();
     super.dispose();
   }
 
@@ -106,12 +110,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       child: Text("FULL NAME"),
                     ),
                     Form(
+                      key: formKey,
                       child: Column(
                         children: [
                           TextFormField(
                             controller: nameController,
                             validator: (value) {
-                              if (value == null) {
+                              if (value == null|| value.isEmpty) {
                                 return "name is required";
                               }
                               return null;
@@ -155,21 +160,41 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           TextFormField(
                             controller: passwordController,
                             autofocus: false,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return "password is required";
+                              }else if(!hasLowercase){
+                                return "password must have at least one lowercase character";
+                              }
+                              else if(!hasLowercase){
+                                return "password must have at least one lowercase character";
+                              
+                              }else if(!hasNumber){
+                                return "password must have at least one Number";
+                              
+                              }else if(!hasUppercase){
+                                return "password must have at least one\nUppercase character";
+                              }else if(!hasSpecialCharacter){
+                                return "password must have at least one \n special character";
+                              }
+                              return null;
+                            },
+                            obscureText: ispasswordHidden,
                             decoration: InputDecoration(
                               hintText: "••••••••••••",
                               prefixIcon: Icon(Icons.lock),
-                              
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              suffixIcon: IconButton(
-                                onPressed: () {},
-                                icon: Icon(Icons.visibility),
-                              ),
+                              suffixIcon: IconButton(onPressed: (){
+                          setState(() {
+                            ispasswordHidden = !ispasswordHidden;
+                          });
+                        }, 
+                        icon: Icon( !ispasswordHidden?Icons.visibility:Icons.visibility_off)),
                             ),
                             focusNode: passwordFocuseNode,
                           ),
-
                           SizedBox(height: 3),
                           Align(
                             alignment: Alignment.centerLeft,
@@ -201,7 +226,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     decoration: hasMinlength
                                     ? TextDecoration.lineThrough
                                         : TextDecoration.none,
-                                   ),
+                                  ),
                                           ),
                                     SizedBox(width: 5,),
                                     Icon(
@@ -211,6 +236,76 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     ),
                                   ],
                                 ),
+                                SizedBox(height: 5,),
+                                Row(children: [
+                                  Text(
+                              " Uppercase Character",
+                                  style: TextStyle(
+                                    decoration:hasUppercase
+                                    ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                          ),
+                                    SizedBox(width: 5,),
+                                    Icon(
+                                      hasUppercase
+                                          ?  Icons.check_circle
+                                          : Icons.circle_outlined,
+                                    ),
+                                ],),
+                                SizedBox(height: 5,),
+                                Row(children: [
+                                  Text(
+                              " Lowercase Character",
+                                  style: TextStyle(
+                                    decoration:hasLowercase
+                                    ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                          ),
+                                    SizedBox(width: 5,),
+                                    Icon(
+                                      hasLowercase
+                                          ?  Icons.check_circle
+                                          : Icons.circle_outlined,
+                                    ),
+                                ],),
+                                SizedBox(height: 5,),
+                                Row(
+                                  children: [
+                                    Text(
+                              "Number",
+                                  style: TextStyle(
+                                    decoration:hasNumber
+                                    ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                          ),
+                                    SizedBox(width: 5,),
+                                    Icon(
+                                    hasNumber
+                                          ?  Icons.check_circle
+                                          : Icons.circle_outlined,
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 5,),
+                                Row(children: [
+                                  Text(
+                              "Special character",
+                                  style: TextStyle(
+                                    decoration:hasSpecialCharacter
+                                    ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                  ),
+                                          ),
+                                    SizedBox(width: 5,),
+                                    Icon(
+                                    hasSpecialCharacter
+                                          ?  Icons.check_circle
+                                          : Icons.circle_outlined,
+                                    ),
+                                ],)
                               ],
                             ),
                           SizedBox(height: 20),
@@ -218,7 +313,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             alignment: Alignment.centerLeft,
                             child: Text("CONFIRM PASSWORD"),
                           ),
-                          TextField(
+                          TextFormField(
+                            controller: confirmPasswordController,
+                            validator:  (value){
+                              if(value == null || value.isEmpty){
+                                return "please Confirm your password";
+                              } 
+                              if(value != passwordController.text){
+                                return "password doesnt match";
+                              }
+                              return null;
+                            },
                             decoration: InputDecoration(
                               hintText: "••••••••••••",
                               border: OutlineInputBorder(
@@ -231,12 +336,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ],
                       ),
                     ),
-
                     Row(
                       children: [
                         Checkbox(
                           value: agreedtoTerms,
-                          onChanged: (value) => {},
+                          onChanged: (value) => {
+                            agreedtoTerms =value?? false
+                          },
                         ),
                         Expanded(
                           child: Text.rich(
@@ -264,9 +370,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ),
                       ],
                     ),
+                    if(showTermsError)
+                            Padding(
+                              padding : const EdgeInsets.only(top : 5),
+                            child :Align(
+                              alignment: AlignmentGeometry.centerLeft,
+                              child: Text("you must agree to the Terms of Service and Privacy Policy",
+                            style: 
+                            TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              )
+                            ),),),
                     SizedBox(height: 30),
                     ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        bool isvalid =formKey.currentState?.validate() ?? false;
+                        setState(() {
+                          showTermsError = !agreedtoTerms;
+                        });
+                        if(isvalid && agreedtoTerms){ 
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Color.fromRGBO(53, 37, 205, 1.0),
                         foregroundColor: Colors.white,
@@ -280,7 +405,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         style: TextStyle(fontSize: 16),
                       ),
                     ),
-
                     SizedBox(height: 25),
                     Divider(
                       color: Colors.grey,

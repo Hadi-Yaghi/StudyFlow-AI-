@@ -148,10 +148,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     SizedBox(height: 20,),
                     ElevatedButton(onPressed:(){
                       
-                      bool isValid = formKey.currentState?.validate() ?? false;
-                      if(isValid){
-                        print("valid form");
-                      }
+                    formKey.currentState?.validate() ?? false;
+                      
                     },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Color.fromRGBO(53, 37, 205,1.0),
