@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import '../services/auth_service.dart';
 
 import 'login_screen.dart';
 
@@ -12,6 +13,7 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
+  final AuthService authService = AuthService();
   bool ispasswordHidden = true;
   bool agreedtoTerms = false;
   TextEditingController nameController = TextEditingController();
@@ -384,12 +386,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ),),),
                     SizedBox(height: 30),
                     ElevatedButton(
-                      onPressed: () {
+                      onPressed: ()  async{
                         bool isvalid =formKey.currentState?.validate() ?? false;
                         setState(() {
                           showTermsError = !agreedtoTerms;
                         });
-                        if(isvalid && agreedtoTerms){ 
+                        if(isvalid && agreedtoTerms){
+                          final response = await authService.register(nameController.text, emailController.text, passwordController.text);
+                          if(response.statusCode == 201){
+                            print("user registered successfully");
+                          }
                         }
                       },
                       style: ElevatedButton.styleFrom(
