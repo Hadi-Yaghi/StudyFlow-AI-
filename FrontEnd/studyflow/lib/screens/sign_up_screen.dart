@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import '../services/auth_service.dart';
 
 import 'login_screen.dart';
+import 'home_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -386,15 +387,35 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ),),),
                     SizedBox(height: 30),
                     ElevatedButton(
-                      onPressed: ()  async{
-                        bool isvalid =formKey.currentState?.validate() ?? false;
+                      onPressed: () async {
+                        bool isvalid = formKey.currentState?.validate() ?? false;
                         setState(() {
                           showTermsError = !agreedtoTerms;
                         });
-                        if(isvalid && agreedtoTerms){
-                          final response = await authService.register(nameController.text, emailController.text, passwordController.text);
-                          if(response.statusCode == 201){
-                            print("user registered successfully");
+                        if (isvalid && agreedtoTerms) {
+                          try {
+                            await authService.register(
+                              nameController.text,
+                              emailController.text,
+                              passwordController.text,
+                            );
+                            if (mounted) {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (context) => const HomeScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(e.toString().replaceAll('Exception: ', '')),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           }
                         }
                       },

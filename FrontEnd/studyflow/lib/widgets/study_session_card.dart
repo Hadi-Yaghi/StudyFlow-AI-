@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../screens/study_session_screen.dart';
 
 class StudySessionCard extends StatelessWidget {
   final String subject;
@@ -87,7 +88,15 @@ class StudySessionCard extends StatelessWidget {
             ],),
             SizedBox(height: 25,),
             ElevatedButton(onPressed: (){
-
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => StudySessionScreen(
+                    courseTitle: subject,
+                    sessionTitle: chapter,
+                    timeInfo: duration,
+                  ),
+                ),
+              );
             }, style: ElevatedButton.styleFrom(
                     backgroundColor: Color.fromRGBO(53, 37, 205, 1.0),
                     foregroundColor: Colors.white,
