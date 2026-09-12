@@ -1,11 +1,26 @@
 class ApiConfig {
   // Base URL for backend server
   // Use 10.0.2.2 for Android Emulator, localhost for Desktop/Web/iOS, or your PC IP
-  static String baseUrl = 'http://192.168.0.102:8081';
+  static String baseUrl = 'http://192.168.0.103:8081';
 
   // Auth endpoints
   static String get loginUrl => '$baseUrl/api/auth/login';
   static String get registerUrl => '$baseUrl/api/auth/register';
+  static String get googleAuthUrl => '$baseUrl/api/auth/google';
+
+  // Google OAuth Server Client ID (Web Client ID used as serverClientId for backend token verification)
+  static const String googleServerClientId =
+      '864921972454-bs6t9sn5kqr2fivi0mm6esrgpqe0cvp3.apps.googleusercontent.com';
+
+  static String get verifyEmailUrl => '$baseUrl/api/auth/verify-email';
+  static String get resendVerificationUrl => '$baseUrl/api/auth/resend-verification';
+  static String get forgotPasswordUrl => '$baseUrl/api/auth/forgot-password';
+  static String get resetPasswordUrl => '$baseUrl/api/auth/reset-password';
+
+  // User & Settings endpoints
+  static String get userProfileUrl => '$baseUrl/api/users/me';
+  static String get userPasswordUrl => '$baseUrl/api/users/me/password';
+  static String get userSettingsUrl => '$baseUrl/api/user-settings';
 
   // Semesters & Courses endpoints
   static String get semestersUrl => '$baseUrl/api/semesters';

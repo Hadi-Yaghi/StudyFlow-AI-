@@ -1,0 +1,15 @@
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.log
+
+# Secrets & OAuth Credentials
+*client_secret*.json
+*credentials*.json
+google-services.json
+.env
+.env.*
+!.env.example

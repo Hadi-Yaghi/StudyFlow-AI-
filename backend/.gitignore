@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Secrets & Credentials ###
+*client_secret*.json
+*credentials*.json
+google-services.json
+

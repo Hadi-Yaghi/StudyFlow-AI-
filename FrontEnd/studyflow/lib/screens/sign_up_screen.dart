@@ -3,7 +3,7 @@ import 'package:flutter/gestures.dart';
 import '../services/auth_service.dart';
 
 import 'login_screen.dart';
-import 'home_screen.dart';
+import 'email_verification_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -17,6 +17,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final AuthService authService = AuthService();
   bool ispasswordHidden = true;
   bool agreedtoTerms = false;
+  bool _isLoading = false;
   TextEditingController nameController = TextEditingController();
   TextEditingController emailController = TextEditingController();
   TextEditingController passwordController = TextEditingController();
@@ -387,50 +388,79 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ),),),
                     SizedBox(height: 30),
                     ElevatedButton(
-                      onPressed: () async {
-                        bool isvalid = formKey.currentState?.validate() ?? false;
-                        setState(() {
-                          showTermsError = !agreedtoTerms;
-                        });
-                        if (isvalid && agreedtoTerms) {
-                          try {
-                            await authService.register(
-                              nameController.text,
-                              emailController.text,
-                              passwordController.text,
-                            );
-                            if (mounted) {
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                  builder: (context) => const HomeScreen(),
-                                ),
-                                (route) => false,
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(e.toString().replaceAll('Exception: ', '')),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        }
-                      },
+                      onPressed: _isLoading
+                          ? null
+                          : () async {
+                              bool isvalid = formKey.currentState?.validate() ?? false;
+                              setState(() {
+                                showTermsError = !agreedtoTerms;
+                              });
+                              if (isvalid && agreedtoTerms) {
+                                setState(() {
+                                  _isLoading = true;
+                                });
+                                final navigator = Navigator.of(context);
+                                final messenger = ScaffoldMessenger.of(context);
+                                try {
+                                   await authService.register(
+                                     nameController.text,
+                                     emailController.text,
+                                     passwordController.text,
+                                   );
+                                   if (mounted) {
+                                     messenger.showSnackBar(
+                                       const SnackBar(
+                                         content: Text('Account created! Please verify your email with the 6-digit code.'),
+                                         backgroundColor: Colors.green,
+                                       ),
+                                     );
+                                     navigator.pushReplacement(
+                                       MaterialPageRoute(
+                                         builder: (context) => EmailVerificationScreen(
+                                           email: emailController.text.trim(),
+                                         ),
+                                       ),
+                                     );
+                                   }
+                                } catch (e) {
+                                  if (mounted) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(e.toString().replaceAll('Exception: ', '')),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _isLoading = false;
+                                    });
+                                  }
+                                }
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color.fromRGBO(53, 37, 205, 1.0),
+                        backgroundColor: const Color.fromRGBO(53, 37, 205, 1.0),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
-                        minimumSize: Size(double.infinity, 60),
+                        minimumSize: const Size(double.infinity, 60),
                       ),
-                      child: Text(
-                        "CREATE ACCOUNT ->",
-                        style: TextStyle(fontSize: 16),
-                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              "CREATE ACCOUNT ->",
+                              style: TextStyle(fontSize: 16),
+                            ),
                     ),
                     SizedBox(height: 25),
                     Divider(

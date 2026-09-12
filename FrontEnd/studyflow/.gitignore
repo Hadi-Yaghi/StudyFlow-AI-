@@ -46,3 +46,14 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Google OAuth & Secrets
+google-services.json
+*client_secret*.json
+*credentials*.json
+
+# Android build outputs & gradle
+/android/build/
+.gradle/
+
+

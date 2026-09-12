@@ -21,9 +21,18 @@ public class User extends BaseEntity{
     @Column(nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash", nullable = true)
     private String passwordHash;
-    
+
+    @Column(length = 100)
+    private String major;
+
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private boolean emailVerified = false;
+
+    @Column(name = "google_id", length = 100)
+    private String googleId;
 }
 
 
