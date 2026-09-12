@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 class ProfileOptionTile extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String? subtitle;
   final VoidCallback? onTap;
   final bool showDivider;
 
   const ProfileOptionTile({
     required this.icon,
     required this.title,
+    this.subtitle,
     this.onTap,
     this.showDivider = true,
     super.key,
@@ -16,6 +18,9 @@ class ProfileOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Column(
       children: [
         InkWell(
@@ -25,12 +30,14 @@ class ProfileOptionTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                // Light Purple Icon Container
+                // Icon Container
                 Container(
                   width: 40,
                   height: 40,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEEECFE),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFFEEECFE),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -41,22 +48,37 @@ class ProfileOptionTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
 
-                // Option Title
+                // Option Title & Subtitle
                 Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1F2937),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : const Color(0xFF1F2937),
+                        ),
+                      ),
+                      if (subtitle != null && subtitle!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
 
                 // Chevron Right
                 Icon(
                   Icons.chevron_right,
-                  color: Colors.grey.shade500,
+                  color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
                   size: 22,
                 ),
               ],
@@ -69,7 +91,7 @@ class ProfileOptionTile extends StatelessWidget {
             thickness: 1,
             indent: 16,
             endIndent: 16,
-            color: Colors.grey.shade100,
+            color: isDark ? const Color(0xFF334155) : Colors.grey.shade100,
           ),
       ],
     );
