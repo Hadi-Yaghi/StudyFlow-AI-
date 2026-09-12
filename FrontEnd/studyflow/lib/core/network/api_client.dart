@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../config/api_config.dart';
 import '../storage/token_storage.dart';
 
@@ -17,6 +18,18 @@ class ApiClient {
         },
       ),
     );
+
+    if (kDebugMode) {
+      dio.interceptors.add(
+        LogInterceptor(
+          request: true,
+          requestBody: true,
+          responseBody: true,
+          error: true,
+          logPrint: (obj) => debugPrint('[API] $obj'),
+        ),
+      );
+    }
 
     dio.interceptors.add(
       InterceptorsWrapper(

@@ -14,4 +14,6 @@ public interface SemesterRepository extends JpaRepository<Semester, Long> {
     Optional<Semester> findByUserAndActiveTrue(User user);
 
     boolean existsByUserAndNameIgnoreCase(User user, String name);
+
+    Optional<Semester> findByUserAndNameIgnoreCase(User user, String name);
 }

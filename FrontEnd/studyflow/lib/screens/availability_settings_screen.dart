@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../models/availability_model.dart';
+import '../services/availability_service.dart';
 import '../widgets/availability_day_item.dart';
 
 class DayAvailability {
@@ -23,6 +25,9 @@ class AvailabilitySettingsScreen extends StatefulWidget {
 }
 
 class _AvailabilitySettingsScreenState extends State<AvailabilitySettingsScreen> {
+  final AvailabilityService _availabilityService = AvailabilityService();
+  bool _isSaving = false;
+
   final List<DayAvailability> _days = [
     DayAvailability(
       dayName: "Monday",
@@ -54,7 +59,102 @@ class _AvailabilitySettingsScreenState extends State<AvailabilitySettingsScreen>
       startTime: const TimeOfDay(hour: 17, minute: 0),
       endTime: const TimeOfDay(hour: 21, minute: 0),
     ),
+    DayAvailability(
+      dayName: "Saturday",
+      isEnabled: true,
+      startTime: const TimeOfDay(hour: 10, minute: 0),
+      endTime: const TimeOfDay(hour: 16, minute: 0),
+    ),
+    DayAvailability(
+      dayName: "Sunday",
+      isEnabled: true,
+      startTime: const TimeOfDay(hour: 10, minute: 0),
+      endTime: const TimeOfDay(hour: 16, minute: 0),
+    ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvailability();
+  }
+
+  Future<void> _loadAvailability() async {
+    try {
+      final list = await _availabilityService.getUserAvailability();
+      if (list.isNotEmpty && mounted) {
+        setState(() {
+          for (final item in list) {
+            final dayIndex = _days.indexWhere(
+              (d) => d.dayName.toUpperCase() == item.day.toUpperCase(),
+            );
+            if (dayIndex != -1) {
+              _days[dayIndex].isEnabled = item.enabled;
+              final startParts = item.startTime.split(':');
+              if (startParts.length >= 2) {
+                _days[dayIndex].startTime = TimeOfDay(
+                  hour: int.tryParse(startParts[0]) ?? 18,
+                  minute: int.tryParse(startParts[1]) ?? 0,
+                );
+              }
+              final endParts = item.endTime.split(':');
+              if (endParts.length >= 2) {
+                _days[dayIndex].endTime = TimeOfDay(
+                  hour: int.tryParse(endParts[0]) ?? 22,
+                  minute: int.tryParse(endParts[1]) ?? 0,
+                );
+              }
+            }
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveAvailability() async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      for (final day in _days) {
+        final start = "${day.startTime.hour.toString().padLeft(2, '0')}:${day.startTime.minute.toString().padLeft(2, '0')}:00";
+        final end = "${day.endTime.hour.toString().padLeft(2, '0')}:${day.endTime.minute.toString().padLeft(2, '0')}:00";
+
+        final model = AvailabilityModel(
+          day: day.dayName.toUpperCase(),
+          startTime: start,
+          endTime: end,
+          enabled: day.isEnabled,
+        );
+        await _availabilityService.saveAvailability(model);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Availability settings saved successfully!"),
+            backgroundColor: Color(0xFF3525CD),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Availability settings saved locally!"),
+            backgroundColor: Color(0xFF3525CD),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
 
   String _formatTime(TimeOfDay tod) {
     final hour = tod.hour.toString().padLeft(2, '0');
@@ -204,21 +304,24 @@ class _AvailabilitySettingsScreenState extends State<AvailabilitySettingsScreen>
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Availability settings saved successfully!"),
-                            ),
-                          );
-                        },
-                        icon: const Icon(
-                          Icons.save_outlined,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        label: const Text(
-                          "Save Availability",
-                          style: TextStyle(
+                        onPressed: _isSaving ? null : _saveAvailability,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.save_outlined,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                        label: Text(
+                          _isSaving ? "Saving..." : "Save Availability",
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

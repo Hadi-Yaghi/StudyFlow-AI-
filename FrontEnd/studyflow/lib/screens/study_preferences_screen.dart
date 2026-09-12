@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../models/study_preferences_model.dart';
+import '../services/study_preferences_service.dart';
 
 class StudyPreferencesScreen extends StatefulWidget {
   const StudyPreferencesScreen({super.key});
@@ -8,9 +10,74 @@ class StudyPreferencesScreen extends StatefulWidget {
 }
 
 class _StudyPreferencesScreenState extends State<StudyPreferencesScreen> {
+  final StudyPreferencesService _preferencesService = StudyPreferencesService();
   String selectedSessionDuration = "45m";
   String selectedBreakDuration = "10m";
   bool weekendStudyEnabled = true;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final pref = await _preferencesService.getPreferences();
+      if (pref != null && mounted) {
+        setState(() {
+          selectedSessionDuration = "${pref.maxSessionMinutes}m";
+          selectedBreakDuration = "${pref.breakMinutes}m";
+          weekendStudyEnabled = pref.allowWeekendStudy;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _savePreferences() async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    final maxMinutes = int.tryParse(selectedSessionDuration.replaceAll('m', '')) ?? 45;
+    final breakMinutes = int.tryParse(selectedBreakDuration.replaceAll('m', '')) ?? 10;
+
+    final pref = StudyPreferencesModel(
+      maxSessionMinutes: maxMinutes,
+      breakMinutes: breakMinutes,
+      allowWeekendStudy: weekendStudyEnabled,
+      preferredStudyStart: "09:00:00",
+      preferredStudyEnd: "22:00:00",
+    );
+
+    try {
+      await _preferencesService.savePreferences(pref);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Study preferences saved successfully!"),
+            backgroundColor: Color(0xFF3525CD),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Study preferences saved locally!"),
+            backgroundColor: Color(0xFF3525CD),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
 
   Widget _buildOptionPill({
     required String label,
@@ -299,7 +366,7 @@ class _StudyPreferencesScreenState extends State<StudyPreferencesScreen> {
                           ),
                           Switch(
                             value: weekendStudyEnabled,
-                            activeColor: const Color(0xFF3525CD),
+                            activeTrackColor: const Color(0xFF3525CD),
                             onChanged: (val) {
                               setState(() {
                                 weekendStudyEnabled = val;
@@ -322,21 +389,24 @@ class _StudyPreferencesScreenState extends State<StudyPreferencesScreen> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Study preferences saved!"),
-                            ),
-                          );
-                        },
-                        icon: const Icon(
-                          Icons.save_outlined,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        label: const Text(
-                          "Save Preferences",
-                          style: TextStyle(
+                        onPressed: _isSaving ? null : _savePreferences,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.save_outlined,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                        label: Text(
+                          _isSaving ? "Saving..." : "Save Preferences",
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

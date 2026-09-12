@@ -1,10 +1,25 @@
 import 'package:flutter/material.dart';
 
 class ProgressCard extends StatelessWidget {
-  const ProgressCard({super.key});
+  final int completedSessions;
+  final int totalSessions;
+  final int completedMinutes;
+  final int totalMinutes;
+  final double progressPercent;
+
+  const ProgressCard({
+    this.completedSessions = 0,
+    this.totalSessions = 0,
+    this.completedMinutes = 0,
+    this.totalMinutes = 0,
+    this.progressPercent = 0.0,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final double safeProgress = progressPercent.clamp(0.0, 1.0);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -24,7 +39,11 @@ class ProgressCard extends StatelessWidget {
                   height: 25,
                   width: 25,
                   child: CircularProgressIndicator(
-                    value: 0.6,
+                    value: totalSessions > 0 ? safeProgress : 0.0,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Color.fromRGBO(53, 37, 205, 1),
+                    ),
                   ),
                 ),
 
@@ -47,20 +66,25 @@ class ProgressCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("3/5 sessions completed"),
-                    const Text("180/300 min",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Color.fromRGBO(53, 37, 205, 1),
-                    ),),
+                    Text("$completedSessions/$totalSessions sessions completed"),
+                    Text(
+                      "$completedMinutes/$totalMinutes min",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color.fromRGBO(53, 37, 205, 1),
+                      ),
+                    ),
                   ],
                 ),
 
                 const SizedBox(height: 8),
 
-                const LinearProgressIndicator(
-                  value: 0.6,
-                  
+                LinearProgressIndicator(
+                  value: totalSessions > 0 ? safeProgress : 0.0,
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color.fromRGBO(53, 37, 205, 1),
+                  ),
                 ),
               ],
             ),
@@ -69,4 +93,4 @@ class ProgressCard extends StatelessWidget {
       ),
     );
   }
-}
+}

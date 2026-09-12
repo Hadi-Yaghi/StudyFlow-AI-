@@ -26,4 +26,22 @@ public class SemesterController {
                 request
         );
     }
+
+    @GetMapping
+    public java.util.List<SemesterResponse> getUserSemesters(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return semesterService.getUserSemesters(
+                userPrincipal.getUser().getId()
+        );
+    }
+
+    @GetMapping("/active")
+    public SemesterResponse getActiveSemester(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return semesterService.getActiveSemester(
+                userPrincipal.getUser().getId()
+        );
+    }
 }

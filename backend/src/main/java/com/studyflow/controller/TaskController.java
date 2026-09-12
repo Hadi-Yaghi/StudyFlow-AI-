@@ -26,4 +26,35 @@ public class TaskController {
                 request
         );
     }
+
+    @GetMapping
+    public java.util.List<TaskResponse> getUserTasks(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return taskService.getUserTasks(
+                userPrincipal.getUser().getId()
+        );
+    }
+
+    @GetMapping("/course/{courseId}")
+    public java.util.List<TaskResponse> getCourseTasks(
+            @PathVariable Long courseId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return taskService.getCourseTasks(
+                userPrincipal.getUser().getId(),
+                courseId
+        );
+    }
+
+    @GetMapping("/{taskId}")
+    public TaskResponse getTaskById(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return taskService.getTaskById(
+                userPrincipal.getUser().getId(),
+                taskId
+        );
+    }
 }

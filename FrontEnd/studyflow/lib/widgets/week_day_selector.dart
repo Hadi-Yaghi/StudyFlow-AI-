@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 
 class WeekDaySelector extends StatefulWidget {
-  const WeekDaySelector({super.key});
+  final DateTime? initialDate;
+  final ValueChanged<DateTime>? onDateSelected;
+
+  const WeekDaySelector({
+    super.key,
+    this.initialDate,
+    this.onDateSelected,
+  });
 
   @override
   State<WeekDaySelector> createState() => _WeekDaySelectorState();
@@ -10,12 +17,15 @@ class WeekDaySelector extends StatefulWidget {
 class _WeekDaySelectorState extends State<WeekDaySelector> {
   final DateTime today = DateTime.now();
 
-  DateTime selectedMonth = DateTime(
-    DateTime.now().year,
-    DateTime.now().month,
-  );
+  late DateTime selectedMonth;
+  late DateTime selectedDate;
 
-  DateTime selectedDate = DateTime.now();
+  @override
+  void initState() {
+    super.initState();
+    selectedDate = widget.initialDate ?? DateTime.now();
+    selectedMonth = DateTime(selectedDate.year, selectedDate.month);
+  }
 
   final List<String> monthNames = [
     'January',
@@ -55,6 +65,7 @@ class _WeekDaySelectorState extends State<WeekDaySelector> {
         1,
       );
     });
+    widget.onDateSelected?.call(selectedDate);
   }
 
   void nextMonth() {
@@ -70,6 +81,7 @@ class _WeekDaySelectorState extends State<WeekDaySelector> {
         1,
       );
     });
+    widget.onDateSelected?.call(selectedDate);
   }
 
   bool isSameDay(DateTime first, DateTime second) {
@@ -142,6 +154,7 @@ class _WeekDaySelectorState extends State<WeekDaySelector> {
                   setState(() {
                     selectedDate = date;
                   });
+                  widget.onDateSelected?.call(date);
                 },
                 child: Container(
                   width: 65,

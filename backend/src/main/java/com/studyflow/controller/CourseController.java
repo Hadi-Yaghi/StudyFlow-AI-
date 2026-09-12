@@ -26,4 +26,35 @@ public class CourseController {
                 request
         );
     }
+
+    @GetMapping
+    public java.util.List<CourseResponse> getUserCourses(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return courseService.getUserCourses(
+                userPrincipal.getUser().getId()
+        );
+    }
+
+    @GetMapping("/semester/{semesterId}")
+    public java.util.List<CourseResponse> getSemesterCourses(
+            @PathVariable Long semesterId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return courseService.getSemesterCourses(
+                userPrincipal.getUser().getId(),
+                semesterId
+        );
+    }
+
+    @GetMapping("/{courseId}")
+    public CourseResponse getCourseById(
+            @PathVariable Long courseId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return courseService.getCourseById(
+                userPrincipal.getUser().getId(),
+                courseId
+        );
+    }
 }

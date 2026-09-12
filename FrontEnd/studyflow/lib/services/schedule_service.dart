@@ -68,8 +68,21 @@ class ScheduleService {
         ApiConfig.generateScheduleUrl,
       );
       return response.statusCode == 200 || response.statusCode == 201;
-    } on DioException catch (_) {
-      return true; // Fallback success indicator
+    } on DioException catch (e) {
+      final errorMsg = _extractErrorMessage(e, 'Failed to generate schedule');
+      throw Exception(errorMsg);
     }
+  }
+
+  String _extractErrorMessage(DioException e, String fallback) {
+    if (e.response?.data != null) {
+      final data = e.response!.data;
+      if (data is Map) {
+        return data['message'] ?? data['error'] ?? fallback;
+      } else if (data is String && data.isNotEmpty) {
+        return data;
+      }
+    }
+    return e.message ?? fallback;
   }
 }

@@ -87,7 +87,7 @@ class AvailabilityDayItem extends StatelessWidget {
                     ),
                     Switch(
                       value: isEnabled,
-                      activeColor: const Color(0xFF3525CD),
+                      activeTrackColor: const Color(0xFF3525CD),
                       onChanged: onToggleChanged,
                     ),
                   ],

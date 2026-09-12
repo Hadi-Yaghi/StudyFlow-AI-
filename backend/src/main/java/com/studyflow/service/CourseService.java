@@ -64,4 +64,62 @@ public class CourseService {
                 .semesterId(saved.getSemester().getId())
                 .build();
     }
+
+    public java.util.List<CourseResponse> getUserCourses(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        java.util.List<Semester> semesters = semesterRepository.findByUser(user);
+        if (semesters.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        return courseRepository.findBySemesterIn(semesters)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public java.util.List<CourseResponse> getSemesterCourses(Long userId, Long semesterId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        Semester semester = semesterRepository.findById(semesterId)
+                .orElseThrow(SemesterNotFoundException::new);
+
+        if (!semester.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("You do not own this semester");
+        }
+
+        return courseRepository.findBySemester(semester)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public CourseResponse getCourseById(Long userId, Long courseId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        if (!course.getSemester().getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("You do not own this course");
+        }
+
+        return mapToResponse(course);
+    }
+
+    private CourseResponse mapToResponse(Course course) {
+        return CourseResponse.builder()
+                .id(course.getId())
+                .name(course.getName())
+                .code(course.getCode())
+                .instructor(course.getInstructor())
+                .creditHours(course.getCreditHours())
+                .color(course.getColor())
+                .semesterId(course.getSemester().getId())
+                .build();
+    }
 }

@@ -10,6 +10,10 @@ import com.studyflow.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class SemesterService {
@@ -24,23 +28,38 @@ public class SemesterService {
         User user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
 
-        if (semesterRepository.existsByUserAndNameIgnoreCase(
+        // Reuse existing semester if one exists with the same name (case-insensitive)
+        Optional<Semester> existing = semesterRepository.findByUserAndNameIgnoreCase(
                 user,
-                request.getName())) {
-
-            throw new IllegalArgumentException(
-                    "Semester already exists");
+                request.getName());
+        if (existing.isPresent()) {
+            return mapToResponse(existing.get());
         }
 
-        if (request.getEndDate()
-                .isBefore(request.getStartDate())) {
+        LocalDate today = LocalDate.now();
+
+        if (request.getEndDate().isBefore(request.getStartDate()) ||
+                request.getEndDate().isEqual(request.getStartDate())) {
             throw new IllegalArgumentException(
                     "End date must be after start date");
         }
 
-        boolean active =
-                semesterRepository.findByUserAndActiveTrue(user)
-                        .isEmpty();
+        if (request.getEndDate().isBefore(today)) {
+            throw new IllegalArgumentException(
+                    "End date cannot be in the past");
+        }
+
+        // Active if today is within [startDate, endDate], or if user has no active semester
+        boolean isCurrent = !request.getStartDate().isAfter(today) && !request.getEndDate().isBefore(today);
+        Optional<Semester> currentActiveOpt = semesterRepository.findByUserAndActiveTrue(user);
+
+        boolean active = currentActiveOpt.isEmpty() || isCurrent;
+
+        if (active && currentActiveOpt.isPresent()) {
+            Semester prevActive = currentActiveOpt.get();
+            prevActive.setActive(false);
+            semesterRepository.save(prevActive);
+        }
 
         Semester semester = Semester.builder()
                 .name(request.getName())
@@ -50,15 +69,37 @@ public class SemesterService {
                 .user(user)
                 .build();
 
-        Semester saved =
-                semesterRepository.save(semester);
+        Semester saved = semesterRepository.save(semester);
 
+        return mapToResponse(saved);
+    }
+
+    public java.util.List<SemesterResponse> getUserSemesters(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        return semesterRepository.findByUser(user)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public SemesterResponse getActiveSemester(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        return semesterRepository.findByUserAndActiveTrue(user)
+                .map(this::mapToResponse)
+                .orElse(null);
+    }
+
+    private SemesterResponse mapToResponse(Semester semester) {
         return SemesterResponse.builder()
-                .id(saved.getId())
-                .name(saved.getName())
-                .startDate(saved.getStartDate())
-                .endDate(saved.getEndDate())
-                .active(saved.isActive())
+                .id(semester.getId())
+                .name(semester.getName())
+                .startDate(semester.getStartDate())
+                .endDate(semester.getEndDate())
+                .active(semester.isActive())
                 .build();
     }
 }

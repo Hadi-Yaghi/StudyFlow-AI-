@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../widgets/session_timer.dart';
+import '../services/ad_service.dart';
 
 class StudySessionScreen extends StatefulWidget {
   final String courseTitle;
@@ -49,6 +50,7 @@ class _StudySessionScreenState extends State<StudySessionScreen> {
           setState(() {
             _isRunning = false;
           });
+          AdService.instance.showInterstitialIfEligible(actionContext: 'study_session_completed');
         }
       });
     }

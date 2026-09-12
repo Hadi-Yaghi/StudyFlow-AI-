@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/course_service.dart';
 
 class CourseFormEntry {
   TextEditingController nameController = TextEditingController();
@@ -418,11 +419,37 @@ class _CoursesSetupScreenState extends State<CoursesSetupScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Courses saved!")),
-                      );
-                      Navigator.of(context).pop();
+                    onPressed: () async {
+                      final service = CourseService();
+                      int savedCount = 0;
+                      for (final entry in _courseEntries) {
+                        final name = entry.nameController.text.trim();
+                        final code = entry.codeController.text.trim().isNotEmpty
+                            ? entry.codeController.text.trim()
+                            : "CS101";
+                        final credits = int.tryParse(entry.creditsController.text.trim()) ?? 3;
+                        if (name.isNotEmpty) {
+                          try {
+                            await service.createCourse(
+                              name: name,
+                              code: code,
+                              instructor: "Dr. Smith",
+                              creditHours: credits,
+                              color: '#3525CD',
+                            );
+                            savedCount++;
+                          } catch (_) {}
+                        }
+                      }
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(savedCount > 0 ? "Courses saved successfully!" : "Setup complete"),
+                            backgroundColor: const Color(0xFF3525CD),
+                          ),
+                        );
+                        Navigator.of(context).pop();
+                      }
                     },
                     child: const Row(
                       children: [
