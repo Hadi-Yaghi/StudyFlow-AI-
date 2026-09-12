@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/course_service.dart';
 
 class AddNewCourseScreen extends StatefulWidget {
   const AddNewCourseScreen({super.key});
@@ -8,15 +9,46 @@ class AddNewCourseScreen extends StatefulWidget {
 }
 
 class _AddNewCourseScreenState extends State<AddNewCourseScreen> {
+  final CourseService _courseService = CourseService();
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _instructorController = TextEditingController();
 
-  String? _selectedSemester;
+  String? _selectedSemester = 'Fall 2026';
   final List<String> _semesters = ['Fall 2026', 'Spring 2027', 'Summer 2027'];
+  bool _isLoading = false;
 
-  void _submitCourse() {
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSemesters();
+  }
+
+  Future<void> _loadUserSemesters() async {
+    try {
+      final userSems = await _courseService.getSemesters();
+      if (mounted && userSems.isNotEmpty) {
+        setState(() {
+          for (final sem in userSems) {
+            final name = sem['name']?.toString();
+            if (name != null && name.isNotEmpty && !_semesters.contains(name)) {
+              _semesters.insert(0, name);
+            }
+          }
+          final activeSem = userSems.firstWhere(
+            (s) => s['active'] == true,
+            orElse: () => {},
+          );
+          if (activeSem.isNotEmpty && activeSem['name'] != null) {
+            _selectedSemester = activeSem['name'].toString();
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _submitCourse() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedSemester == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -28,16 +60,47 @@ class _AddNewCourseScreenState extends State<AddNewCourseScreen> {
         return;
       }
 
-      final newCourseData = {
-        'code': _codeController.text.trim().toUpperCase(),
-        'title': _nameController.text.trim(),
-        'instructor': _instructorController.text.trim().isEmpty
-            ? 'Dr. Smith'
-            : _instructorController.text.trim(),
-        'semester': _selectedSemester,
-      };
+      setState(() {
+        _isLoading = true;
+      });
 
-      Navigator.of(context).pop(newCourseData);
+      try {
+        await _courseService.createCourse(
+          name: _nameController.text.trim(),
+          code: _codeController.text.trim().toUpperCase(),
+          instructor: _instructorController.text.trim().isEmpty
+              ? 'Dr. Smith'
+              : _instructorController.text.trim(),
+          creditHours: 3,
+          color: '#3525CD',
+          semesterName: _selectedSemester,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Course created successfully!"),
+              backgroundColor: Color(0xFF3525CD),
+            ),
+          );
+          Navigator.of(context).pop(true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
     }
   }
 
@@ -216,7 +279,7 @@ class _AddNewCourseScreenState extends State<AddNewCourseScreen> {
                                     ),
                                     const SizedBox(height: 6),
                                     DropdownButtonFormField<String>(
-                                      value: _selectedSemester,
+                                      initialValue: _selectedSemester,
                                       hint: Row(
                                         children: [
                                           Icon(
@@ -392,15 +455,24 @@ class _AddNewCourseScreenState extends State<AddNewCourseScreen> {
                                               borderRadius: BorderRadius.circular(12),
                                             ),
                                           ),
-                                          onPressed: _submitCourse,
-                                          icon: const Icon(
-                                            Icons.add,
-                                            color: Colors.white,
-                                            size: 18,
-                                          ),
-                                          label: const Text(
-                                            "Add Course",
-                                            style: TextStyle(
+                                          onPressed: _isLoading ? null : _submitCourse,
+                                          icon: _isLoading
+                                              ? const SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child: CircularProgressIndicator(
+                                                    color: Colors.white,
+                                                    strokeWidth: 2,
+                                                  ),
+                                                )
+                                              : const Icon(
+                                                  Icons.add,
+                                                  color: Colors.white,
+                                                  size: 18,
+                                                ),
+                                          label: Text(
+                                            _isLoading ? "Adding..." : "Add Course",
+                                            style: const TextStyle(
                                               color: Colors.white,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 15,
