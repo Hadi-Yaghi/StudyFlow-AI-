@@ -20,15 +20,11 @@ class AvailabilityService {
     }
   }
 
-  Future<AvailabilityModel?> saveAvailability(AvailabilityModel availability) async {
-    try {
-      final response = await _apiClient.dio.post(
-        ApiConfig.availabilityUrl,
-        data: availability.toJson(),
-      );
-      return AvailabilityModel.fromJson(response.data);
-    } on DioException catch (_) {
-      return availability;
-    }
+  Future<AvailabilityModel> saveAvailability(AvailabilityModel availability) async {
+    final response = await _apiClient.dio.post(
+      ApiConfig.availabilityUrl,
+      data: availability.toJson(),
+    );
+    return AvailabilityModel.fromJson(response.data);
   }
 }

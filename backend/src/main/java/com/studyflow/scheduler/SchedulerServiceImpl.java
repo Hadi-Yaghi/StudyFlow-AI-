@@ -3,13 +3,16 @@ package com.studyflow.scheduler;
 import com.studyflow.entity.*;
 import com.studyflow.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.LocalTime;
+import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SchedulerServiceImpl implements SchedulerService {
@@ -28,129 +31,302 @@ public class SchedulerServiceImpl implements SchedulerService {
     @Override
     @Transactional
     public SchedulerResult generateSchedule(String email) {
+        log.info("==================================================");
+        log.info("STARTING SCHEDULE GENERATION FOR: {}", email);
+        log.info("==================================================");
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User not found: " + email));
 
-        StudyPreferences preferences =
-                studyPreferencesRepository.findByUser(user)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Study preferences not found"
-                                ));
+        log.info("Authenticated user ID: {}", user.getId());
 
-        List<Availability> availabilities =
-                availabilityRepository.findByUser(user);
+        LocalDate today = LocalDate.now();
+        log.info("Current scheduling date (today): {}", today);
 
-        // Get the user's semesters
-        List<Semester> semesters =
-                semesterRepository.findByUser(user);
+        // 1. Semester Checks
+        List<Semester> allSemesters = semesterRepository.findByUser(user);
+        log.info("Total semesters found: {}", allSemesters.size());
 
-        // Get all courses belonging to those semesters
-        List<Course> courses =
-                courseRepository.findBySemesterIn(semesters);
+        List<Semester> activeSemesters = allSemesters.stream()
+                .filter(s -> {
+                    boolean activeFlag = s.isActive();
+                    boolean started = s.getStartDate() == null || !today.isBefore(s.getStartDate());
+                    boolean notEnded = s.getEndDate() == null || !today.isAfter(s.getEndDate());
+                    return activeFlag && started && notEnded;
+                })
+                .toList();
 
-        // Get all tasks belonging to those courses
-        List<Task> tasks =
-                taskRepository.findByCourseIn(courses);
+        if (activeSemesters.isEmpty()) {
+            List<Semester> flaggedActive = allSemesters.stream().filter(Semester::isActive).toList();
+            if (!flaggedActive.isEmpty()) {
+                activeSemesters = flaggedActive;
+                log.info("Using active semester(s) with lenient date matching: count={}", activeSemesters.size());
+            } else if (!allSemesters.isEmpty()) {
+                activeSemesters = allSemesters;
+                log.info("No active semester flag set; falling back to all user semesters: count={}", activeSemesters.size());
+            } else {
+                log.warn("No semesters found for user ID: {}. Schedule generation aborted.", user.getId());
+                return buildFailureResult("NO_ACTIVE_SEMESTER", "No active semester found. Please create or activate a semester.");
+            }
+        }
+
+        for (Semester s : activeSemesters) {
+            log.info("Active semester: ID={}, name='{}', startDate={}, endDate={}, active={}",
+                    s.getId(), s.getName(), s.getStartDate(), s.getEndDate(), s.isActive());
+        }
+
+        // 2. Course Checks
+        List<Course> courses = courseRepository.findBySemesterIn(activeSemesters);
+        log.info("Courses found: {}", courses.size());
+        for (Course c : courses) {
+            log.info("Course: ID={}, name='{}', code='{}', semesterID={}",
+                    c.getId(), c.getName(), c.getCode(), c.getSemester() != null ? c.getSemester().getId() : null);
+        }
+
+        if (courses.isEmpty()) {
+            log.warn("No courses found for user ID: {}. Schedule generation aborted.", user.getId());
+            return buildFailureResult("NO_ACTIVE_TASKS", "No courses found in your active semester. Please add courses first.");
+        }
+
+        // 3. Task Checks & Eligibility
+        List<Task> allTasks = taskRepository.findByCourseIn(courses);
+        log.info("Tasks found: {}", allTasks.size());
+
+        List<Task> eligibleTasks = new ArrayList<>();
+        int completedCount = 0;
+        int zeroRemainingCount = 0;
+        int pastDueCount = 0;
+
+        for (Task task : allTasks) {
+            int estimatedHours = task.getEstimatedHours() != null ? task.getEstimatedHours() : 0;
+            int completedHours = task.getCompletedHours() != null ? task.getCompletedHours() : 0;
+            int remainingMinutes = Math.max((estimatedHours - completedHours) * 60, 0);
+
+            if (task.getStatus() == TaskStatus.COMPLETED) {
+                log.warn("Task [id={}, title='{}'] REJECTED: status == COMPLETED", task.getId(), task.getTitle());
+                completedCount++;
+                continue;
+            }
+            if (task.getDueDate() == null) {
+                log.warn("Task [id={}, title='{}'] REJECTED: dueDate is null", task.getId(), task.getTitle());
+                continue;
+            }
+            if (task.getDueDate().isBefore(today)) {
+                log.warn("Task [id={}, title='{}'] REJECTED: dueDate = {} is before currentDate = {}",
+                        task.getId(), task.getTitle(), task.getDueDate(), today);
+                pastDueCount++;
+                continue;
+            }
+            if (estimatedHours <= 0) {
+                log.warn("Task [id={}, title='{}'] REJECTED: estimatedHours = 0", task.getId(), task.getTitle());
+                continue;
+            }
+            if (remainingMinutes <= 0) {
+                log.warn("Task [id={}, title='{}'] REJECTED: remainingMinutes = 0 (estimatedHours={}, completedHours={})",
+                        task.getId(), task.getTitle(), estimatedHours, completedHours);
+                zeroRemainingCount++;
+                continue;
+            }
+
+            log.info("Task [id={}, title='{}', status={}, dueDate={}, estimatedHours={}, completedHours={}, remainingMinutes={}] ELIGIBLE",
+                    task.getId(), task.getTitle(), task.getStatus(), task.getDueDate(), estimatedHours, completedHours, remainingMinutes);
+            eligibleTasks.add(task);
+        }
+
+        log.info("Eligible tasks: {}", eligibleTasks.size());
+
+        if (eligibleTasks.isEmpty()) {
+            if (allTasks.isEmpty()) {
+                return buildFailureResult("NO_ACTIVE_TASKS", "No tasks found for your courses. Please add tasks to generate a schedule.");
+            }
+            if (completedCount == allTasks.size() || (completedCount + zeroRemainingCount) == allTasks.size()) {
+                return buildFailureResult("NO_REMAINING_TASK_TIME", "All tasks are already completed or have no remaining time.");
+            }
+            if (pastDueCount > 0) {
+                return buildFailureResult("TASKS_OUTSIDE_DATE_RANGE", "All existing tasks have due dates that have already passed.");
+            }
+            return buildFailureResult("NO_ACTIVE_TASKS", "No eligible tasks found. Please verify your task due dates and estimated hours.");
+        }
+
+        // 4. Study Preferences Check
+        StudyPreferences preferences = studyPreferencesRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Study preferences not found for user: " + email));
+
+        log.info("Study preferences: maxSessionMinutes={}, breakMinutes={}, allowWeekendStudy={}, preferredStart={}, preferredEnd={}",
+                preferences.getMaxSessionMinutes(), preferences.getBreakMinutes(),
+                preferences.getAllowWeekendStudy(), preferences.getPreferredStudyStart(), preferences.getPreferredStudyEnd());
+
+        // 5. Availability Retrieval
+        List<Availability> availabilities = availabilityRepository.findByUser(user);
+        log.info("Availability entries: {}", availabilities.size());
+        for (Availability a : availabilities) {
+            log.info("Availability: day={}, enabled={}, startTime={}, endTime={}",
+                    a.getDay(), a.isEnabled(), a.getStartTime(), a.getEndTime());
+        }
+
+        if (availabilities.isEmpty()) {
+            log.warn("Zero availability entries configured for user ID: {}. Returning NO_AVAILABILITY.", user.getId());
+            return buildFailureResult("NO_AVAILABILITY", "No study availability configured. Please set your weekly study availability in Profile > Availability.");
+        }
+
+        boolean anyEnabled = availabilities.stream().anyMatch(Availability::isEnabled);
+        if (!anyEnabled) {
+            log.warn("All availability entries are disabled for user ID: {}. Returning NO_AVAILABLE_TIME.", user.getId());
+            return buildFailureResult("NO_AVAILABLE_TIME", "All study availability days are disabled. Please enable study days in Profile > Availability.");
+        }
+
         // Remove previously generated sessions for these tasks
         studySessionRepository.deleteByTaskInAndStatusNotIn(
-                tasks,
+                eligibleTasks,
                 List.of(
                         StudySessionStatus.COMPLETED,
                         StudySessionStatus.MISSED
                 )
         );
-        List<StudySession> generatedSessions =
-                new ArrayList<>();
 
-        LocalDate today = LocalDate.now();
+        // 6. Scheduling Loop across 7 candidate days
+        List<StudySession> generatedSessions = new ArrayList<>();
+        Map<Long, Integer> remainingMinutesMap = new HashMap<>();
+        for (Task t : eligibleTasks) {
+            int est = t.getEstimatedHours() != null ? t.getEstimatedHours() : 0;
+            int comp = t.getCompletedHours() != null ? t.getCompletedHours() : 0;
+            remainingMinutesMap.put(t.getId(), Math.max((est - comp) * 60, 0));
+        }
+
+        int totalAvailableMinutesAcrossHorizon = 0;
 
         for (int i = 0; i < 7; i++) {
-
             LocalDate date = today.plusDays(i);
-
             DayOfWeek dayOfWeek = date.getDayOfWeek();
-            System.out.println(
-                    "Checking: " + date + " (" + dayOfWeek + ")"
-            );
-            // Skip weekends if the user doesn't allow weekend study
-            if (!preferences.getAllowWeekendStudy()
-                    && (dayOfWeek == DayOfWeek.SATURDAY
-                    || dayOfWeek == DayOfWeek.SUNDAY)) {
 
+            // Check weekend preference
+            if (!preferences.getAllowWeekendStudy()
+                    && (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY)) {
+                log.info("Date {}: Skipping weekend day ({}) because allowWeekendStudy is false", date, dayOfWeek);
                 continue;
             }
 
-            List<Availability> dailyAvailability =
-                    availabilities.stream()
-                            .filter(availability ->
-                                    availability.isEnabled()
-                                            && availability.getDay()
-                                            .name()
-                                            .equals(dayOfWeek.name()))
-                            .toList();
+            // Find matching availability for this day of week
+            List<Availability> dailyAvailability = availabilities.stream()
+                    .filter(availability ->
+                            availability.isEnabled()
+                                    && availability.getDay().name().equals(dayOfWeek.name()))
+                    .toList();
+
+            if (dailyAvailability.isEmpty()) {
+                log.info("Date {} ({}): No enabled availability record found", date, dayOfWeek);
+                continue;
+            }
 
             for (Availability availability : dailyAvailability) {
+                LocalTime slotStart = availability.getStartTime();
+                LocalTime slotEnd = availability.getEndTime();
+
+                // Intersect with preferred study hours if configured
+                if (preferences.getPreferredStudyStart() != null && preferences.getPreferredStudyEnd() != null) {
+                    LocalTime prefStart = preferences.getPreferredStudyStart();
+                    LocalTime prefEnd = preferences.getPreferredStudyEnd();
+
+                    LocalTime effectiveStart = slotStart.isBefore(prefStart) ? prefStart : slotStart;
+                    LocalTime effectiveEnd = slotEnd.isAfter(prefEnd) ? prefEnd : slotEnd;
+
+                    if (!effectiveStart.isBefore(effectiveEnd)) {
+                        log.warn("Date {} ({}): Availability slot {}-{} has NO INTERSECTION with preferred window {}-{} (0 minutes)",
+                                date, dayOfWeek, slotStart, slotEnd, prefStart, prefEnd);
+                        continue;
+                    }
+
+                    slotStart = effectiveStart;
+                    slotEnd = effectiveEnd;
+                }
 
                 List<TimeAllocator.TimeBlock> blocks =
-                        timeAllocator.allocate(
-                                availability.getStartTime(),
-                                availability.getEndTime(),
-                                preferences
-                        );
+                        timeAllocator.allocate(slotStart, slotEnd, preferences);
+
+                int slotMinutes = blocks.stream().mapToInt(TimeAllocator.TimeBlock::getMinutes).sum();
+                totalAvailableMinutesAcrossHorizon += slotMinutes;
+
+                log.info("Date {} ({}): Allocated {} time blocks ({} minutes) within window {}-{}",
+                        date, dayOfWeek, blocks.size(), slotMinutes, slotStart, slotEnd);
 
                 List<StudySession> sessions =
                         sessionGenerator.generate(
-                                new ArrayList<>(tasks),
+                                new ArrayList<>(eligibleTasks),
                                 blocks,
-                                date
+                                date,
+                                remainingMinutesMap
                         );
 
+                log.info("Date {} ({}): Generated {} study sessions", date, dayOfWeek, sessions.size());
                 generatedSessions.addAll(sessions);
             }
         }
 
-        studySessionRepository.saveAll(generatedSessions);
+        // Save generated sessions
+        if (!generatedSessions.isEmpty()) {
+            studySessionRepository.saveAll(generatedSessions);
+            studySessionRepository.flush();
+        }
 
-        int scheduledMinutes =
-                generatedSessions.stream()
-                        .mapToInt(StudySession::getPlannedMinutes)
-                        .sum();
+        int scheduledMinutes = generatedSessions.stream()
+                .mapToInt(StudySession::getPlannedMinutes)
+                .sum();
 
-        int totalRemainingMinutes =
-                tasks.stream()
-                        .mapToInt(task -> {
+        int totalInitialRemaining = eligibleTasks.stream()
+                .mapToInt(task -> {
+                    int est = task.getEstimatedHours() != null ? task.getEstimatedHours() : 0;
+                    int comp = task.getCompletedHours() != null ? task.getCompletedHours() : 0;
+                    return Math.max((est - comp) * 60, 0);
+                })
+                .sum();
 
-                            int estimatedHours =
-                                    task.getEstimatedHours() != null
-                                            ? task.getEstimatedHours()
-                                            : 0;
+        int unscheduledMinutes = Math.max(totalInitialRemaining - scheduledMinutes, 0);
 
-                            int completedHours =
-                                    task.getCompletedHours() != null
-                                            ? task.getCompletedHours()
-                                            : 0;
+        LocalDate firstSessionDate = generatedSessions.stream()
+                .map(StudySession::getSessionDate)
+                .min(LocalDate::compareTo)
+                .orElse(null);
 
-                            return Math.max(
-                                    (estimatedHours - completedHours) * 60,
-                                    0
-                            );
-                        })
-                        .sum();
+        List<LocalDate> sessionDates = generatedSessions.stream()
+                .map(StudySession::getSessionDate)
+                .distinct()
+                .sorted()
+                .toList();
 
-        int unscheduledMinutes =
-                Math.max(
-                        totalRemainingMinutes - scheduledMinutes,
-                        0
-                );
+        log.info("Generated sessions: {}", generatedSessions.size());
+        log.info("Total scheduled minutes: {}, unscheduled minutes: {}", scheduledMinutes, unscheduledMinutes);
+        log.info("First session date: {}, session dates: {}", firstSessionDate, sessionDates);
+        log.info("==================================================");
+
+        if (generatedSessions.isEmpty()) {
+            if (totalAvailableMinutesAcrossHorizon == 0) {
+                return buildFailureResult("NO_AVAILABLE_TIME", "No available study time found within your preferred hours and availability window.");
+            }
+            return buildFailureResult("TASKS_OUTSIDE_DATE_RANGE", "No sessions could be scheduled. Your tasks may be due before the next available study slot.");
+        }
 
         return SchedulerResult.builder()
                 .generatedSessions(generatedSessions.size())
                 .scheduledMinutes(scheduledMinutes)
                 .unscheduledMinutes(unscheduledMinutes)
+                .firstSessionDate(firstSessionDate)
+                .sessionDates(sessionDates)
+                .status("SUCCESS")
+                .message("Successfully scheduled " + generatedSessions.size() + " study sessions.")
+                .failureReason(null)
                 .build();
     }
 
+    private SchedulerResult buildFailureResult(String status, String message) {
+        return SchedulerResult.builder()
+                .generatedSessions(0)
+                .scheduledMinutes(0)
+                .unscheduledMinutes(0)
+                .firstSessionDate(null)
+                .sessionDates(List.of())
+                .status(status)
+                .message(message)
+                .failureReason(status)
+                .build();
+    }
 }

@@ -19,12 +19,45 @@ class _WeekDaySelectorState extends State<WeekDaySelector> {
 
   late DateTime selectedMonth;
   late DateTime selectedDate;
+  late final ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     selectedDate = widget.initialDate ?? DateTime.now();
     selectedMonth = DateTime(selectedDate.year, selectedDate.month);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelectedDay());
+  }
+
+  @override
+  void didUpdateWidget(covariant WeekDaySelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialDate != null &&
+        !isSameDay(widget.initialDate!, selectedDate)) {
+      setState(() {
+        selectedDate = widget.initialDate!;
+        selectedMonth = DateTime(selectedDate.year, selectedDate.month);
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelectedDay());
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSelectedDay() {
+    if (!_scrollController.hasClients) return;
+    final targetOffset = ((selectedDate.day - 1) * 75.0 - 75.0)
+        .clamp(0.0, _scrollController.position.maxScrollExtent);
+    _scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   final List<String> monthNames = [
@@ -130,6 +163,7 @@ class _WeekDaySelectorState extends State<WeekDaySelector> {
         SizedBox(
           height: 90,
           child: ListView.builder(
+            controller: _scrollController,
             scrollDirection: Axis.horizontal,
             itemCount: daysInMonth,
             itemBuilder: (context, index) {

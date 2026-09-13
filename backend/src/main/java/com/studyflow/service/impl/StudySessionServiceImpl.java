@@ -12,11 +12,14 @@ import com.studyflow.repository.TaskRepository;
 import com.studyflow.repository.UserRepository;
 import com.studyflow.service.StudySessionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class StudySessionServiceImpl implements StudySessionService {
@@ -26,28 +29,36 @@ public class StudySessionServiceImpl implements StudySessionService {
     private final TaskRepository taskRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public List<StudySessionResponse> getSessionsByDate(
             String email,
             LocalDate date
     ) {
+        log.debug("Fetching sessions for user: {} on date: {}", email, date);
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(UserNotFoundException::new);
 
-        return studySessionRepository.findBySessionDateOrderByStartTime(date)
+        List<StudySessionResponse> responses = studySessionRepository.findByUserAndSessionDateOrderByStartTime(user, date)
                 .stream()
-                .filter(session ->
-                        session.getTask()
-                                .getCourse()
-                                .getSemester()
-                                .getUser()
-                                .getId()
-                                .equals(user.getId()))
                 .map(this::mapToResponse)
                 .toList();
+
+        log.debug("Found {} sessions for user: {} on date: {}", responses.size(), email, date);
+        return responses;
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<LocalDate> getSessionDates(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(UserNotFoundException::new);
+
+        return studySessionRepository.findSessionDatesByUser(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<StudySessionResponse> getTaskSessions(Long taskId) {
 
         Task task = taskRepository.findById(taskId)
@@ -71,8 +82,8 @@ public class StudySessionServiceImpl implements StudySessionService {
                 .plannedMinutes(session.getPlannedMinutes())
                 .completedMinutes(session.getCompletedMinutes())
                 .status(session.getStatus())
-                .taskId(session.getTask().getId())
-                .taskTitle(session.getTask().getTitle())
+                .taskId(session.getTask() != null ? session.getTask().getId() : null)
+                .taskTitle(session.getTask() != null ? session.getTask().getTitle() : "")
                 .build();
     }
     @Override

@@ -94,16 +94,25 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      await _scheduleService.generateSchedule();
+      final result = await _scheduleService.generateSchedule();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Schedule generated successfully!"),
-            backgroundColor: Color(0xFF3525CD),
-          ),
-        );
-        await _loadDashboardData();
-        AdService.instance.showInterstitialIfEligible(actionContext: 'generate_schedule');
+        if (result.generatedSessions == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("No study sessions could be scheduled. Please check your tasks and availability."),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Schedule generated successfully! (${result.generatedSessions} sessions scheduled)"),
+              backgroundColor: const Color(0xFF3525CD),
+            ),
+          );
+          await _loadDashboardData();
+          AdService.instance.showInterstitialIfEligible(actionContext: 'generate_schedule');
+        }
       }
     } catch (e) {
       if (mounted) {

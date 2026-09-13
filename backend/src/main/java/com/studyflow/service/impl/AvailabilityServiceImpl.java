@@ -12,10 +12,13 @@ import com.studyflow.service.AvailabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class AvailabilityServiceImpl implements AvailabilityService {
 
     private final AvailabilityRepository availabilityRepository;
@@ -30,20 +33,16 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(UserNotFoundException::new);
 
-        availabilityRepository.findByUserAndDay(user, request.getDay())
-                .ifPresent(a -> {
-                    throw new ResourceAlreadyExistsException(
-                            "Availability already exists for this day"
-                    );
-                });
+        Availability availability = availabilityRepository
+                .findByUserAndDay(user, request.getDay())
+                .orElseGet(() -> Availability.builder()
+                        .user(user)
+                        .day(request.getDay())
+                        .build());
 
-        Availability availability = Availability.builder()
-                .day(request.getDay())
-                .startTime(request.getStartTime())
-                .endTime(request.getEndTime())
-                .enabled(request.getEnabled())
-                .user(user)
-                .build();
+        availability.setStartTime(request.getStartTime());
+        availability.setEndTime(request.getEndTime());
+        availability.setEnabled(request.getEnabled());
 
         Availability saved = availabilityRepository.save(availability);
 

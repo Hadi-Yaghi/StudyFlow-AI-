@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class SessionGenerator {
@@ -23,11 +24,22 @@ public class SessionGenerator {
             List<TimeAllocator.TimeBlock> timeBlocks,
             LocalDate date
     ) {
+        return generate(tasks, timeBlocks, date, null);
+    }
+
+    public List<StudySession> generate(
+            List<Task> tasks,
+            List<TimeAllocator.TimeBlock> timeBlocks,
+            LocalDate date,
+            Map<Long, Integer> remainingMinutesMap
+    ) {
 
         List<Task> sortedTasks = tasks.stream()
                 .filter(task ->
                         task.getStatus() != null &&
                                 !task.getStatus().name().equals("COMPLETED")
+                                && (task.getDueDate() == null || !date.isAfter(task.getDueDate()))
+                                && (remainingMinutesMap == null || remainingMinutesMap.getOrDefault(task.getId(), getRemainingMinutes(task)) > 0)
                 )
                 .sorted((task1, task2) ->
                         Double.compare(
@@ -40,20 +52,19 @@ public class SessionGenerator {
         List<StudySession> sessions = new ArrayList<>();
 
         int taskIndex = 0;
-        int remainingTaskMinutes = 0;
 
         while (taskIndex < sortedTasks.size()
                 && !timeBlocks.isEmpty()) {
 
             Task task = sortedTasks.get(taskIndex);
 
-            if (remainingTaskMinutes <= 0) {
-                remainingTaskMinutes = getRemainingMinutes(task);
+            int currentRemaining = remainingMinutesMap != null
+                    ? remainingMinutesMap.getOrDefault(task.getId(), getRemainingMinutes(task))
+                    : getRemainingMinutes(task);
 
-                if (remainingTaskMinutes <= 0) {
-                    taskIndex++;
-                    continue;
-                }
+            if (currentRemaining <= 0) {
+                taskIndex++;
+                continue;
             }
 
             TimeAllocator.TimeBlock block =
@@ -62,7 +73,7 @@ public class SessionGenerator {
             int blockMinutes = block.getMinutes();
 
             int scheduledMinutes = Math.min(
-                    remainingTaskMinutes,
+                    currentRemaining,
                     blockMinutes
             );
 
@@ -81,9 +92,12 @@ public class SessionGenerator {
 
             sessions.add(session);
 
-            remainingTaskMinutes -= scheduledMinutes;
+            int updatedRemaining = currentRemaining - scheduledMinutes;
+            if (remainingMinutesMap != null) {
+                remainingMinutesMap.put(task.getId(), updatedRemaining);
+            }
 
-            if (remainingTaskMinutes <= 0) {
+            if (updatedRemaining <= 0) {
                 taskIndex++;
             }
         }
@@ -91,7 +105,7 @@ public class SessionGenerator {
         return sessions;
     }
 
-    private int getRemainingMinutes(Task task) {
+    public int getRemainingMinutes(Task task) {
 
         int estimatedHours = task.getEstimatedHours() != null
                 ? task.getEstimatedHours()

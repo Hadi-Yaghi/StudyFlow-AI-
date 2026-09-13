@@ -32,6 +32,16 @@ public class StudySessionController {
         );
     }
 
+    @GetMapping("/dates")
+    public List<LocalDate> getSessionDates(
+            Authentication authentication
+    ) {
+
+        return studySessionService.getSessionDates(
+                authentication.getName()
+        );
+    }
+
     @GetMapping("/task/{taskId}")
     public List<StudySessionResponse> getTaskSessions(
             @PathVariable Long taskId

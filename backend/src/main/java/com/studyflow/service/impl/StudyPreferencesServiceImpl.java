@@ -12,8 +12,11 @@ import com.studyflow.service.StudyPreferencesService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import org.springframework.transaction.annotation.Transactional;
+
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class StudyPreferencesServiceImpl implements StudyPreferencesService {
 
     private final StudyPreferencesRepository studyPreferencesRepository;
@@ -28,21 +31,17 @@ public class StudyPreferencesServiceImpl implements StudyPreferencesService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(UserNotFoundException::new);
 
-        studyPreferencesRepository.findByUser(user)
-                .ifPresent(p -> {
-                    throw new ResourceAlreadyExistsException(
-                            "Study preferences already exist"
-                    );
-                });
+        StudyPreferences preferences = studyPreferencesRepository
+                .findByUser(user)
+                .orElseGet(() -> StudyPreferences.builder()
+                        .user(user)
+                        .build());
 
-        StudyPreferences preferences = StudyPreferences.builder()
-                .maxSessionMinutes(request.getMaxSessionMinutes())
-                .breakMinutes(request.getBreakMinutes())
-                .allowWeekendStudy(request.getAllowWeekendStudy())
-                .preferredStudyStart(request.getPreferredStudyStart())
-                .preferredStudyEnd(request.getPreferredStudyEnd())
-                .user(user)
-                .build();
+        preferences.setMaxSessionMinutes(request.getMaxSessionMinutes());
+        preferences.setBreakMinutes(request.getBreakMinutes());
+        preferences.setAllowWeekendStudy(request.getAllowWeekendStudy());
+        preferences.setPreferredStudyStart(request.getPreferredStudyStart());
+        preferences.setPreferredStudyEnd(request.getPreferredStudyEnd());
 
         StudyPreferences saved = studyPreferencesRepository.save(preferences);
 

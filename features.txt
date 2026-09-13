@@ -1,0 +1,7 @@
+1-premium plan => no ads 
+2-premium plan => upload course files 
+3-premium plan => ai generates scheduale based on the upload 
+4-premium plan => generates more than 3 scheduale 
+5-free pan => rescheduale every 2 hours 
+6-fix generate scheduale 
+7-fix the hardcoded course details 

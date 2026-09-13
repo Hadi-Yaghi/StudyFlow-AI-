@@ -13,6 +13,10 @@ public interface StudySessionService {
             LocalDate date
     );
 
+    List<LocalDate> getSessionDates(
+            String email
+    );
+
     List<StudySessionResponse> getTaskSessions(
             Long taskId
     );

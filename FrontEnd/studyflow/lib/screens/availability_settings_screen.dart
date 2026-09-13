@@ -138,12 +138,12 @@ class _AvailabilitySettingsScreenState extends State<AvailabilitySettingsScreen>
           ),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Availability settings saved locally!"),
-            backgroundColor: Color(0xFF3525CD),
+          SnackBar(
+            content: Text("Failed to save availability: $e"),
+            backgroundColor: Colors.red,
           ),
         );
       }

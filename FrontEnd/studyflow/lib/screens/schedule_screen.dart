@@ -1,4 +1,6 @@
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
+import '../models/scheduler_result_model.dart';
 import '../models/study_session_model.dart';
 import '../services/schedule_service.dart';
 import '../widgets/home_header.dart';
@@ -6,6 +8,7 @@ import '../widgets/week_day_selector.dart';
 import '../widgets/schedule_box.dart';
 import 'session_missed_screen.dart';
 import 'study_session_screen.dart';
+import 'availability_settings_screen.dart';
 import '../services/ad_service.dart';
 import '../widgets/ads/banner_ad_widget.dart';
 
@@ -29,10 +32,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     _loadSessions();
   }
 
+  String _formatDate(DateTime date) {
+    return "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+  }
+
   Future<void> _loadSessions() async {
     setState(() {
       _isLoading = true;
     });
+
+    final formatted = _formatDate(_selectedDate);
+    developer.log('Loading sessions for selected date: $formatted', name: 'ScheduleScreen');
 
     try {
       final sessions = await _scheduleService.getSessionsByDate(_selectedDate);
@@ -41,8 +51,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           _sessions = sessions;
           _isLoading = false;
         });
+        developer.log('Loaded ${sessions.length} sessions for $formatted', name: 'ScheduleScreen');
       }
     } catch (e) {
+      developer.log('Error loading sessions for $formatted: $e', name: 'ScheduleScreen');
       if (mounted) {
         setState(() {
           _sessions = [];
@@ -66,19 +78,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       _isGenerating = true;
     });
 
+    developer.log('Schedule generation started', name: 'ScheduleScreen');
+
+    SchedulerResultModel? result;
     try {
-      await _scheduleService.generateSchedule();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Schedule generated successfully!"),
-            backgroundColor: Color(0xFF3525CD),
-          ),
-        );
-        await _loadSessions();
-        AdService.instance.showInterstitialIfEligible(actionContext: 'generate_schedule');
-      }
+      result = await _scheduleService.generateSchedule();
+      developer.log(
+        'Schedule generation succeeded: ${result.generatedSessions} sessions across ${result.sessionDates}',
+        name: 'ScheduleScreen',
+      );
     } catch (e) {
+      developer.log('Schedule generation failed: $e', name: 'ScheduleScreen');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -86,12 +96,106 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
         setState(() {
           _isGenerating = false;
         });
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Check if 0 sessions were generated
+    if (result.generatedSessions == 0) {
+      setState(() {
+        _isGenerating = false;
+      });
+      final message = result.message ??
+          "No study sessions could be scheduled. Please verify your course tasks and availability.";
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.orange.shade800,
+          duration: const Duration(seconds: 5),
+          action: result.status == 'NO_AVAILABILITY'
+              ? SnackBarAction(
+                  label: 'Set Hours',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AvailabilitySettingsScreen(),
+                      ),
+                    );
+                  },
+                )
+              : null,
+        ),
+      );
+      return;
+    }
+
+    // Sessions were generated!
+    // Handle selected date: check if the currently selected date has sessions
+    final currentFormatted = _formatDate(_selectedDate);
+    DateTime targetDate = _selectedDate;
+
+    if (!result.sessionDates.contains(currentFormatted) && result.firstSessionDate != null) {
+      try {
+        targetDate = DateTime.parse(result.firstSessionDate!);
+        developer.log(
+          'Current date ($currentFormatted) has no generated sessions. Navigating to first session date: ${result.firstSessionDate}',
+          name: 'ScheduleScreen',
+        );
+      } catch (_) {
+        targetDate = _selectedDate;
+      }
+    }
+
+    setState(() {
+      _selectedDate = targetDate;
+    });
+
+    // Authoritative reload of sessions for target date
+    developer.log('Reloading sessions from backend for date: ${_formatDate(_selectedDate)}', name: 'ScheduleScreen');
+    bool refreshFailed = false;
+    try {
+      final sessions = await _scheduleService.getSessionsByDate(_selectedDate);
+      if (mounted) {
+        setState(() {
+          _sessions = sessions;
+        });
+        developer.log(
+          'Sessions refreshed successfully: ${sessions.length} sessions for ${_formatDate(_selectedDate)}',
+          name: 'ScheduleScreen',
+        );
+      }
+    } catch (e) {
+      refreshFailed = true;
+      developer.log('Refresh failed after generation: $e', name: 'ScheduleScreen');
+    }
+
+    if (mounted) {
+      setState(() {
+        _isGenerating = false;
+      });
+
+      if (refreshFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Schedule generated, but failed to load sessions. Pull down to refresh."),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Schedule generated successfully! (${result.generatedSessions} sessions scheduled)"),
+            backgroundColor: const Color(0xFF3525CD),
+          ),
+        );
+        AdService.instance.showInterstitialIfEligible(actionContext: 'generate_schedule');
       }
     }
   }
