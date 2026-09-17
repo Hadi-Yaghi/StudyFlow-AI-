@@ -20,6 +20,12 @@ public interface StudySessionService {
     List<StudySessionResponse> getTaskSessions(
             Long taskId
     );
+
+    List<StudySessionResponse> getCourseSessions(
+            String email,
+            Long courseId
+    );
+
     StudySessionResponse updateStatus(
             String email,
             Long sessionId,

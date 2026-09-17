@@ -24,4 +24,6 @@ public class CourseResponse {
     private String color;
 
     private Long semesterId;
+
+    private String semesterName;
 }

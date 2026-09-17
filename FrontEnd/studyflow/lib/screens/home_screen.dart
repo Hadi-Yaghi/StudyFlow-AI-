@@ -18,6 +18,7 @@ import 'courses_screen.dart';
 import 'profile_screen.dart';
 import '../core/storage/token_storage.dart';
 import '../services/ad_service.dart';
+import '../services/notification_service.dart';
 import '../widgets/ads/banner_ad_widget.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -46,6 +47,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadUser();
     _loadDashboardData();
+    NotificationService.instance.wasPermissionPrompted().then((prompted) {
+      if (!prompted && mounted) {
+        NotificationService.instance.requestPermission();
+      }
+    });
   }
 
   Future<void> _loadUser() async {
@@ -111,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
           await _loadDashboardData();
+          NotificationService.instance.syncNotificationsWithDatabase();
           AdService.instance.showInterstitialIfEligible(actionContext: 'generate_schedule');
         }
       }

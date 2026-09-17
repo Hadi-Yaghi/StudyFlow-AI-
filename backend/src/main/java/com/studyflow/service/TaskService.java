@@ -118,6 +118,23 @@ public class TaskService {
         return mapToResponse(task);
     }
 
+    public TaskResponse updateTaskStatus(Long userId, Long taskId, TaskStatus status) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new RuntimeException("Task not found"));
+
+        if (!task.getCourse().getSemester().getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException(
+                    "You do not own this task");
+        }
+
+        task.setStatus(status);
+        Task updated = taskRepository.save(task);
+        return mapToResponse(updated);
+    }
+
     private TaskResponse mapToResponse(Task task) {
         return TaskResponse.builder()
                 .id(task.getId())

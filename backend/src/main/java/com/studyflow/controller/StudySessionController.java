@@ -49,6 +49,18 @@ public class StudySessionController {
 
         return studySessionService.getTaskSessions(taskId);
     }
+
+    @GetMapping("/course/{courseId}")
+    public List<StudySessionResponse> getCourseSessions(
+            Authentication authentication,
+            @PathVariable Long courseId
+    ) {
+
+        return studySessionService.getCourseSessions(
+                authentication.getName(),
+                courseId
+        );
+    }
     @PatchMapping("/{sessionId}/status")
     public StudySessionResponse updateStatus(
             Authentication authentication,

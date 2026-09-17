@@ -6,6 +6,7 @@ class CourseModel {
   final int creditHours;
   final String color;
   final int semesterId;
+  final String? semesterName;
 
   CourseModel({
     required this.id,
@@ -15,6 +16,7 @@ class CourseModel {
     required this.creditHours,
     required this.color,
     required this.semesterId,
+    this.semesterName,
   });
 
   factory CourseModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class CourseModel {
       creditHours: json['creditHours'] ?? 3,
       color: json['color'] ?? '#3525CD',
       semesterId: json['semesterId'] ?? 0,
+      semesterName: json['semesterName']?.toString(),
     );
   }
 
@@ -37,6 +40,7 @@ class CourseModel {
       'creditHours': creditHours,
       'color': color,
       'semesterId': semesterId,
+      'semesterName': semesterName,
     };
   }
 }

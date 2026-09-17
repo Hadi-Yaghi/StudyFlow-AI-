@@ -11,6 +11,7 @@ import 'account_settings_screen.dart';
 import 'availability_settings_screen.dart';
 import 'login_screen.dart';
 import 'study_preferences_screen.dart';
+import '../services/notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -134,11 +135,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: const Text('Enable Notifications', style: TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: const Text('Master switch for StudyFlow alerts'),
                     value: _notificationsEnabled,
-                    activeColor: const Color(0xFF3525CD),
+                    activeTrackColor: const Color(0xFF3525CD),
                     onChanged: (val) {
                       setModalState(() => _notificationsEnabled = val);
                       setState(() => _notificationsEnabled = val);
                       _settingsService.updateSettings(notificationsEnabled: val);
+                      NotificationService.instance.syncNotificationsWithDatabase();
                     },
                   ),
                   const Divider(),
@@ -146,12 +148,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: const Text('Study Reminders'),
                     subtitle: const Text('Alerts before scheduled study sessions'),
                     value: _notificationsEnabled && _studyReminders,
-                    activeColor: const Color(0xFF3525CD),
+                    activeTrackColor: const Color(0xFF3525CD),
                     onChanged: _notificationsEnabled
                         ? (val) {
                             setModalState(() => _studyReminders = val);
                             setState(() => _studyReminders = val);
                             _settingsService.updateSettings(studyReminders: val);
+                            NotificationService.instance.syncNotificationsWithDatabase();
                           }
                         : null,
                   ),
@@ -159,12 +162,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: const Text('Task & Deadline Reminders'),
                     subtitle: const Text('Alerts for upcoming due dates'),
                     value: _notificationsEnabled && _taskDeadlines,
-                    activeColor: const Color(0xFF3525CD),
+                    activeTrackColor: const Color(0xFF3525CD),
                     onChanged: _notificationsEnabled
                         ? (val) {
                             setModalState(() => _taskDeadlines = val);
                             setState(() => _taskDeadlines = val);
                             _settingsService.updateSettings(taskDeadlines: val);
+                            NotificationService.instance.syncNotificationsWithDatabase();
                           }
                         : null,
                   ),

@@ -49,6 +49,12 @@ class SemesterCourseIntegrationTest {
     private CourseRepository courseRepository;
 
     @Autowired
+    private com.studyflow.repository.TaskRepository taskRepository;
+
+    @Autowired
+    private com.studyflow.repository.StudySessionRepository studySessionRepository;
+
+    @Autowired
     private com.studyflow.security.JwtService jwtService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -175,5 +181,94 @@ class SemesterCourseIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(pastReqJson))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testCourseDetails_Tasks_StatusUpdate_AndSessions() throws Exception {
+        // 1. Create semester
+        String semJson = """
+                {
+                  "name": "Fall 2026",
+                  "startDate": "2026-09-01",
+                  "endDate": "2026-12-31"
+                }
+                """;
+        MvcResult semRes = mockMvc.perform(post("/api/semesters")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(semJson))
+                .andExpect(status().isOk())
+                .andReturn();
+        Long semesterId = objectMapper.readTree(semRes.getResponse().getContentAsString()).get("id").asLong();
+
+        // 2. Create course
+        String courseJson = """
+                {
+                  "name": "Algorithms & Data Structures",
+                  "code": "CS202",
+                  "instructor": "Prof. Turing",
+                  "creditHours": 4,
+                  "color": "#3525CD",
+                  "semesterId": %d
+                }
+                """.formatted(semesterId);
+        MvcResult courseRes = mockMvc.perform(post("/api/courses")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(courseJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.semesterName").value("Fall 2026"))
+                .andReturn();
+        Long courseId = objectMapper.readTree(courseRes.getResponse().getContentAsString()).get("id").asLong();
+
+        // 3. Verify GET /api/courses/{courseId} returns semesterName
+        mockMvc.perform(get("/api/courses/" + courseId)
+                        .header("Authorization", "Bearer " + authToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(courseId))
+                .andExpect(jsonPath("$.name").value("Algorithms & Data Structures"))
+                .andExpect(jsonPath("$.semesterName").value("Fall 2026"));
+
+        // 4. Create task for this course
+        String taskJson = """
+                {
+                  "title": "Sorting Algorithms Assignment",
+                  "description": "Implement MergeSort and QuickSort",
+                  "type": "ASSIGNMENT",
+                  "priority": "HIGH",
+                  "dueDate": "2026-09-20",
+                  "estimatedHours": 3,
+                  "courseId": %d
+                }
+                """.formatted(courseId);
+        MvcResult taskRes = mockMvc.perform(post("/api/tasks")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(taskJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("TODO"))
+                .andReturn();
+        Long taskId = objectMapper.readTree(taskRes.getResponse().getContentAsString()).get("id").asLong();
+
+        // 5. Query course tasks via GET /api/tasks/course/{courseId}
+        mockMvc.perform(get("/api/tasks/course/" + courseId)
+                        .header("Authorization", "Bearer " + authToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(taskId))
+                .andExpect(jsonPath("$[0].title").value("Sorting Algorithms Assignment"));
+
+        // 6. Update task status via PATCH /api/tasks/{taskId}/status
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/tasks/" + taskId + "/status")
+                        .param("status", "COMPLETED")
+                        .header("Authorization", "Bearer " + authToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(taskId))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+        // 7. Verify course sessions endpoint GET /api/study-sessions/course/{courseId}
+        mockMvc.perform(get("/api/study-sessions/course/" + courseId)
+                        .header("Authorization", "Bearer " + authToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
     }
 }

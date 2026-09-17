@@ -2,11 +2,9 @@ package com.studyflow.service.impl;
 
 import com.studyflow.dto.studysession.StudySessionResponse;
 import com.studyflow.dto.studysession.UpdateStudySessionRequest;
-import com.studyflow.entity.StudySession;
-import com.studyflow.entity.StudySessionStatus;
-import com.studyflow.entity.Task;
-import com.studyflow.entity.User;
+import com.studyflow.entity.*;
 import com.studyflow.exception.UserNotFoundException;
+import com.studyflow.repository.CourseRepository;
 import com.studyflow.repository.StudySessionRepository;
 import com.studyflow.repository.TaskRepository;
 import com.studyflow.repository.UserRepository;
@@ -27,6 +25,7 @@ public class StudySessionServiceImpl implements StudySessionService {
     private final StudySessionRepository studySessionRepository;
     private final UserRepository userRepository;
     private final TaskRepository taskRepository;
+    private final CourseRepository courseRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -65,6 +64,25 @@ public class StudySessionServiceImpl implements StudySessionService {
                 .orElseThrow(UserNotFoundException::new);
 
         return studySessionRepository.findByTask(task)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StudySessionResponse> getCourseSessions(String email, Long courseId) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(UserNotFoundException::new);
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        if (!course.getSemester().getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("You do not own this course");
+        }
+
+        return studySessionRepository.findByUserAndCourseIdOrderByDateAndStartTime(user, courseId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -161,6 +179,22 @@ public class StudySessionServiceImpl implements StudySessionService {
 
         StudySession savedSession =
                 studySessionRepository.save(session);
+
+        if (request.getStatus() == StudySessionStatus.COMPLETED && session.getTask() != null) {
+            Task task = session.getTask();
+            List<StudySession> allSessions = studySessionRepository.findByTask(task);
+            int totalCompletedMinutes = allSessions.stream()
+                    .mapToInt(s -> (s.getId() != null && s.getId().equals(savedSession.getId()))
+                            ? (savedSession.getCompletedMinutes() != null ? savedSession.getCompletedMinutes() : 0)
+                            : (s.getCompletedMinutes() != null ? s.getCompletedMinutes() : 0))
+                    .sum();
+            int newCompletedHours = totalCompletedMinutes / 60;
+            task.setCompletedHours(newCompletedHours);
+            if (task.getEstimatedHours() != null && newCompletedHours >= task.getEstimatedHours()) {
+                task.setStatus(TaskStatus.COMPLETED);
+            }
+            taskRepository.save(task);
+        }
 
         return mapToResponse(savedSession);
     }

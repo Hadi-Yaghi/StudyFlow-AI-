@@ -57,4 +57,17 @@ public class TaskController {
                 taskId
         );
     }
+
+    @PatchMapping("/{taskId}/status")
+    public TaskResponse updateTaskStatus(
+            @PathVariable Long taskId,
+            @RequestParam com.studyflow.entity.TaskStatus status,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return taskService.updateTaskStatus(
+                userPrincipal.getUser().getId(),
+                taskId,
+                status
+        );
+    }
 }

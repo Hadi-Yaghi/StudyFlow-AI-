@@ -6,12 +6,14 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'screens/login_screen.dart';
 import 'services/ad_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeController.instance.init();
   await LocaleController.instance.init();
   await AdService.instance.initialize();
+  await NotificationService.instance.init();
   runApp(const MyApp());
 }
 

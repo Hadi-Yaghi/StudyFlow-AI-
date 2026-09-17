@@ -62,6 +62,7 @@ public class CourseService {
                 .creditHours(saved.getCreditHours())
                 .color(saved.getColor())
                 .semesterId(saved.getSemester().getId())
+                .semesterName(saved.getSemester() != null ? saved.getSemester().getName() : null)
                 .build();
     }
 
@@ -120,6 +121,7 @@ public class CourseService {
                 .creditHours(course.getCreditHours())
                 .color(course.getColor())
                 .semesterId(course.getSemester().getId())
+                .semesterName(course.getSemester() != null ? course.getSemester().getName() : null)
                 .build();
     }
 }

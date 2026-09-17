@@ -10,6 +10,7 @@ import 'session_missed_screen.dart';
 import 'study_session_screen.dart';
 import 'availability_settings_screen.dart';
 import '../services/ad_service.dart';
+import '../services/notification_service.dart';
 import '../widgets/ads/banner_ad_widget.dart';
 
 class ScheduleScreen extends StatefulWidget {
@@ -52,6 +53,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           _isLoading = false;
         });
         developer.log('Loaded ${sessions.length} sessions for $formatted', name: 'ScheduleScreen');
+        NotificationService.instance.syncNotificationsWithDatabase();
       }
     } catch (e) {
       developer.log('Error loading sessions for $formatted: $e', name: 'ScheduleScreen');
@@ -195,6 +197,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             backgroundColor: const Color(0xFF3525CD),
           ),
         );
+        NotificationService.instance.syncNotificationsWithDatabase();
         AdService.instance.showInterstitialIfEligible(actionContext: 'generate_schedule');
       }
     }
@@ -214,6 +217,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => StudySessionScreen(
+            sessionId: session.id,
+            plannedMinutes: session.plannedMinutes,
             courseTitle: "Task #${session.taskId}",
             sessionTitle: session.taskTitle.isNotEmpty ? session.taskTitle : "Study Session",
             timeInfo: timeRange,

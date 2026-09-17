@@ -22,7 +22,7 @@ class TaskService {
 
   Future<List<TaskModel>> getCourseTasks(int courseId) async {
     try {
-      final response = await _apiClient.dio.get('${ApiConfig.tasksUrl}/course/$courseId');
+      final response = await _apiClient.dio.get(ApiConfig.getCourseTasksUrl(courseId));
       if (response.data is List) {
         return (response.data as List)
             .map((json) => TaskModel.fromJson(Map<String, dynamic>.from(json)))
@@ -31,6 +31,18 @@ class TaskService {
       return [];
     } on DioException catch (e) {
       throw Exception(_extractErrorMessage(e, 'Failed to load course tasks'));
+    }
+  }
+
+  Future<TaskModel> updateTaskStatus(int taskId, String status) async {
+    try {
+      final response = await _apiClient.dio.patch(
+        ApiConfig.updateTaskStatusUrl(taskId),
+        queryParameters: {'status': status},
+      );
+      return TaskModel.fromJson(Map<String, dynamic>.from(response.data));
+    } on DioException catch (e) {
+      throw Exception(_extractErrorMessage(e, 'Failed to update task status'));
     }
   }
 

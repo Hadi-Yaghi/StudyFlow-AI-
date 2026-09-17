@@ -65,6 +65,24 @@ class ScheduleService {
     }
   }
 
+  Future<List<StudySessionModel>> getCourseSessions(int courseId) async {
+    try {
+      final response = await _apiClient.dio.get(
+        ApiConfig.getCourseSessionsUrl(courseId),
+      );
+
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => StudySessionModel.fromJson(json))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      developer.log('Error fetching course sessions: $e', name: 'ScheduleService');
+      return [];
+    }
+  }
+
   Future<StudySessionModel?> updateSessionStatus(
     int sessionId,
     String status, // PLANNED, IN_PROGRESS, COMPLETED, MISSED

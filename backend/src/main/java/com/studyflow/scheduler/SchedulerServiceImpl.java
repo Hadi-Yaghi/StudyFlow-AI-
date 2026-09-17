@@ -27,6 +27,7 @@ public class SchedulerServiceImpl implements SchedulerService {
 
     private final TimeAllocator timeAllocator;
     private final SessionGenerator sessionGenerator;
+    private final ScheduleConflictValidator scheduleConflictValidator;
 
     @Override
     @Transactional
@@ -152,8 +153,10 @@ public class SchedulerServiceImpl implements SchedulerService {
         StudyPreferences preferences = studyPreferencesRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Study preferences not found for user: " + email));
 
+        int breakMinutes = preferences.getBreakMinutes() != null ? Math.max(preferences.getBreakMinutes(), 0) : 15;
+
         log.info("Study preferences: maxSessionMinutes={}, breakMinutes={}, allowWeekendStudy={}, preferredStart={}, preferredEnd={}",
-                preferences.getMaxSessionMinutes(), preferences.getBreakMinutes(),
+                preferences.getMaxSessionMinutes(), breakMinutes,
                 preferences.getAllowWeekendStudy(), preferences.getPreferredStudyStart(), preferences.getPreferredStudyEnd());
 
         // 5. Availability Retrieval
@@ -175,7 +178,7 @@ public class SchedulerServiceImpl implements SchedulerService {
             return buildFailureResult("NO_AVAILABLE_TIME", "All study availability days are disabled. Please enable study days in Profile > Availability.");
         }
 
-        // Remove previously generated sessions for these tasks
+        // Remove previously generated PLANNED sessions for these tasks before re-generating
         studySessionRepository.deleteByTaskInAndStatusNotIn(
                 eligibleTasks,
                 List.of(
@@ -183,6 +186,7 @@ public class SchedulerServiceImpl implements SchedulerService {
                         StudySessionStatus.MISSED
                 )
         );
+        studySessionRepository.flush();
 
         // 6. Scheduling Loop across 7 candidate days
         List<StudySession> generatedSessions = new ArrayList<>();
@@ -194,6 +198,9 @@ public class SchedulerServiceImpl implements SchedulerService {
         }
 
         int totalAvailableMinutesAcrossHorizon = 0;
+
+        // Maintain occupied intervals per candidate date to avoid conflicts across tasks/slots
+        Map<LocalDate, List<ScheduleConflictValidator.TimeInterval>> dailyOccupiedMap = new HashMap<>();
 
         for (int i = 0; i < 7; i++) {
             LocalDate date = today.plusDays(i);
@@ -218,6 +225,19 @@ public class SchedulerServiceImpl implements SchedulerService {
                 continue;
             }
 
+            // Load existing active sessions from database for this user on this date
+            List<StudySession> existingDbSessions = studySessionRepository
+                    .findByUserAndSessionDateAndStatusInOrderByStartTime(
+                            user,
+                            date,
+                            ScheduleConflictValidator.TIME_OCCUPYING_STATUSES
+                    );
+
+            List<ScheduleConflictValidator.TimeInterval> occupiedList = dailyOccupiedMap.computeIfAbsent(date, d -> new ArrayList<>());
+            for (StudySession existing : existingDbSessions) {
+                occupiedList.add(new ScheduleConflictValidator.TimeInterval(existing.getStartTime(), existing.getEndTime()));
+            }
+
             for (Availability availability : dailyAvailability) {
                 LocalTime slotStart = availability.getStartTime();
                 LocalTime slotEnd = availability.getEndTime();
@@ -240,8 +260,9 @@ public class SchedulerServiceImpl implements SchedulerService {
                     slotEnd = effectiveEnd;
                 }
 
+                // Allocate conflict-free time blocks that carve around currently occupied sessions
                 List<TimeAllocator.TimeBlock> blocks =
-                        timeAllocator.allocate(slotStart, slotEnd, preferences);
+                        timeAllocator.allocate(slotStart, slotEnd, preferences, date, occupiedList);
 
                 int slotMinutes = blocks.stream().mapToInt(TimeAllocator.TimeBlock::getMinutes).sum();
                 totalAvailableMinutesAcrossHorizon += slotMinutes;
@@ -249,16 +270,39 @@ public class SchedulerServiceImpl implements SchedulerService {
                 log.info("Date {} ({}): Allocated {} time blocks ({} minutes) within window {}-{}",
                         date, dayOfWeek, blocks.size(), slotMinutes, slotStart, slotEnd);
 
-                List<StudySession> sessions =
+                List<StudySession> candidateSessions =
                         sessionGenerator.generate(
                                 new ArrayList<>(eligibleTasks),
                                 blocks,
                                 date,
-                                remainingMinutesMap
+                                remainingMinutesMap,
+                                breakMinutes
                         );
 
-                log.info("Date {} ({}): Generated {} study sessions", date, dayOfWeek, sessions.size());
-                generatedSessions.addAll(sessions);
+                for (StudySession candidate : candidateSessions) {
+                    // Strict pre-save validation against occupied timeline
+                    boolean conflict = scheduleConflictValidator.hasConflictWithAny(
+                            candidate.getStartTime(),
+                            candidate.getEndTime(),
+                            occupiedList,
+                            breakMinutes
+                    );
+
+                    if (conflict) {
+                        log.warn("REJECTED candidate taskId={} date={} candidate={}-{} reason=OVERLAPS_OCCUPIED_TIME",
+                                candidate.getTask().getId(), date, candidate.getStartTime(), candidate.getEndTime());
+                        continue;
+                    }
+
+                    // Register candidate in occupied timeline immediately
+                    occupiedList.add(new ScheduleConflictValidator.TimeInterval(candidate.getStartTime(), candidate.getEndTime()));
+                    generatedSessions.add(candidate);
+
+                    log.info("ACCEPTED taskId={} taskTitle='{}' date={} start={} end={} ({} min)",
+                            candidate.getTask().getId(), candidate.getTask().getTitle(),
+                            candidate.getSessionDate(), candidate.getStartTime(), candidate.getEndTime(),
+                            candidate.getPlannedMinutes());
+                }
             }
         }
 

@@ -1,7 +1,7 @@
 class ApiConfig {
   // Base URL for backend server
   // Use 10.0.2.2 for Android Emulator, localhost for Desktop/Web/iOS, or your PC IP
-  static String baseUrl = 'http://192.168.0.102:8081';
+  static String baseUrl = 'http://192.168.0.101:8081';
 
   // Auth endpoints
   static String get loginUrl => '$baseUrl/api/auth/login';
@@ -28,11 +28,14 @@ class ApiConfig {
 
   // Tasks endpoints
   static String get tasksUrl => '$baseUrl/api/tasks';
+  static String getCourseTasksUrl(int courseId) => '$baseUrl/api/tasks/course/$courseId';
+  static String updateTaskStatusUrl(int taskId) => '$baseUrl/api/tasks/$taskId/status';
 
   // Study Sessions endpoints
   static String get studySessionsUrl => '$baseUrl/api/study-sessions';
   static String get studySessionDatesUrl => '$baseUrl/api/study-sessions/dates';
   static String getTaskSessionsUrl(int taskId) => '$baseUrl/api/study-sessions/task/$taskId';
+  static String getCourseSessionsUrl(int courseId) => '$baseUrl/api/study-sessions/course/$courseId';
   static String updateSessionStatusUrl(int sessionId) => '$baseUrl/api/study-sessions/$sessionId/status';
 
   // Scheduler endpoint

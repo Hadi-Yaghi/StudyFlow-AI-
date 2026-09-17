@@ -1,14 +1,20 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/notification_service.dart';
+import '../services/schedule_service.dart';
 import '../widgets/session_timer.dart';
 import '../services/ad_service.dart';
 
 class StudySessionScreen extends StatefulWidget {
+  final int? sessionId;
+  final int? plannedMinutes;
   final String courseTitle;
   final String sessionTitle;
   final String timeInfo;
 
   const StudySessionScreen({
+    this.sessionId,
+    this.plannedMinutes,
     this.courseTitle = "Database Systems",
     this.sessionTitle = "ER Diagram Assignment",
     this.timeInfo = "18:00 - 19:30 (90 min)",
@@ -21,8 +27,17 @@ class StudySessionScreen extends StatefulWidget {
 
 class _StudySessionScreenState extends State<StudySessionScreen> {
   Timer? _timer;
-  int _secondsRemaining = 90 * 60; // 90 minutes
+  late int _secondsRemaining;
+  late int _totalSeconds;
   bool _isRunning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final minutes = widget.plannedMinutes ?? 90;
+    _secondsRemaining = minutes * 60;
+    _totalSeconds = _secondsRemaining;
+  }
 
   @override
   void dispose() {
@@ -40,6 +55,12 @@ class _StudySessionScreenState extends State<StudySessionScreen> {
       setState(() {
         _isRunning = true;
       });
+
+      // Update session status to IN_PROGRESS on start
+      if (widget.sessionId != null) {
+        ScheduleService().updateSessionStatus(widget.sessionId!, 'IN_PROGRESS', 0);
+      }
+
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (_secondsRemaining > 0) {
           setState(() {
@@ -50,6 +71,13 @@ class _StudySessionScreenState extends State<StudySessionScreen> {
           setState(() {
             _isRunning = false;
           });
+
+          // Mark completed and cancel obsolete notification
+          if (widget.sessionId != null) {
+            ScheduleService().updateSessionStatus(widget.sessionId!, 'COMPLETED', widget.plannedMinutes ?? 60);
+            NotificationService.instance.cancelSessionNotifications(widget.sessionId!);
+          }
+
           AdService.instance.showInterstitialIfEligible(actionContext: 'study_session_completed');
         }
       });
@@ -64,7 +92,7 @@ class _StudySessionScreenState extends State<StudySessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final double progress = _secondsRemaining / (90 * 60);
+    final double progress = _totalSeconds > 0 ? (_secondsRemaining / _totalSeconds).clamp(0.0, 1.0) : 1.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),

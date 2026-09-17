@@ -19,7 +19,13 @@ import org.springframework.web.context.WebApplicationContext;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import com.studyflow.scheduler.ScheduleConflictValidator;
+import com.studyflow.service.MissedSessionService;
+import com.studyflow.service.MissedSessionReschedulingService;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -60,10 +66,20 @@ class SchedulerIntegrationTest {
     @Autowired
     private JwtService jwtService;
 
+    @Autowired
+    private MissedSessionService missedSessionService;
+
+    @Autowired
+    private MissedSessionReschedulingService missedSessionReschedulingService;
+
+    @Autowired
+    private ScheduleConflictValidator scheduleConflictValidator;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private User testUser;
     private String authToken;
+    private Task testTask;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -147,7 +163,7 @@ class SchedulerIntegrationTest {
                 .completedHours(0)
                 .status(TaskStatus.TODO)
                 .build();
-        taskRepository.save(task);
+        testTask = taskRepository.save(task);
     }
 
     @Test
@@ -378,5 +394,415 @@ class SchedulerIntegrationTest {
         assertEquals(0, genJson.get("generatedSessions").asInt());
         assertEquals("NO_AVAILABILITY", genJson.get("status").asText());
         assertTrue(genJson.get("message").asText().contains("No study availability configured"));
+    }
+
+    @Test
+    void testMultipleTasks_ZeroOverlaps_AndBreakEnforced() throws Exception {
+        String email = "five_tasks_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        User user = User.builder()
+                .name("Five Tasks Student")
+                .email(email)
+                .passwordHash("hash")
+                .emailVerified(true)
+                .build();
+        userRepository.save(user);
+        String token = jwtService.generateToken(email);
+
+        Semester semester = Semester.builder()
+                .user(user)
+                .name("Fall 2026")
+                .startDate(LocalDate.now().minusDays(5))
+                .endDate(LocalDate.now().plusMonths(3))
+                .active(true)
+                .build();
+        semesterRepository.save(semester);
+
+        Course course = Course.builder()
+                .semester(semester)
+                .name("Distributed Systems")
+                .code("CS501")
+                .creditHours(4)
+                .color("#3525CD")
+                .build();
+        courseRepository.save(course);
+
+        // Create 5 tasks
+        for (int i = 1; i <= 5; i++) {
+            Task task = Task.builder()
+                    .course(course)
+                    .title("Assignment " + i)
+                    .type(TaskType.ASSIGNMENT)
+                    .priority(TaskPriority.HIGH)
+                    .dueDate(LocalDate.now().plusDays(6))
+                    .estimatedHours(2)
+                    .completedHours(0)
+                    .status(TaskStatus.TODO)
+                    .build();
+            taskRepository.save(task);
+        }
+
+        int breakMinutes = 15;
+        StudyPreferences preferences = StudyPreferences.builder()
+                .user(user)
+                .maxSessionMinutes(60)
+                .breakMinutes(breakMinutes)
+                .preferredStudyStart(LocalTime.of(16, 0))
+                .preferredStudyEnd(LocalTime.of(23, 0))
+                .allowWeekendStudy(true)
+                .build();
+        studyPreferencesRepository.save(preferences);
+
+        // Daily availability 16:00 to 23:00 for all days
+        for (DayOfWeekEnum day : DayOfWeekEnum.values()) {
+            Availability availability = Availability.builder()
+                    .user(user)
+                    .day(day)
+                    .startTime(LocalTime.of(16, 0))
+                    .endTime(LocalTime.of(23, 0))
+                    .enabled(true)
+                    .build();
+            availabilityRepository.save(availability);
+        }
+
+        // Generate schedule
+        MvcResult generateResult = mockMvc.perform(post("/api/scheduler/generate")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode genJson = objectMapper.readTree(generateResult.getResponse().getContentAsString());
+        int generatedCount = genJson.get("generatedSessions").asInt();
+        assertTrue(generatedCount >= 5, "Should generate multiple sessions for 5 tasks");
+
+        // Fetch all generated sessions for the user from DB
+        List<StudySession> allSessions = studySessionRepository.findFutureSessionsByUser(
+                user,
+                List.of(StudySessionStatus.PLANNED),
+                LocalDate.now()
+        );
+        assertFalse(allSessions.isEmpty());
+
+        // Group sessions by date and verify mathematical overlap and break rule
+        Map<LocalDate, List<StudySession>> byDate = allSessions.stream()
+                .collect(Collectors.groupingBy(StudySession::getSessionDate));
+
+        for (Map.Entry<LocalDate, List<StudySession>> entry : byDate.entrySet()) {
+            List<StudySession> daily = entry.getValue();
+            daily.sort((a, b) -> a.getStartTime().compareTo(b.getStartTime()));
+
+            for (int i = 0; i < daily.size(); i++) {
+                for (int j = i + 1; j < daily.size(); j++) {
+                    StudySession s1 = daily.get(i);
+                    StudySession s2 = daily.get(j);
+
+                    // Rule 1: No direct overlap (s1.start < s2.end && s2.start < s1.end)
+                    boolean directOverlap = s1.getStartTime().isBefore(s2.getEndTime())
+                            && s2.getStartTime().isBefore(s1.getEndTime());
+                    assertFalse(directOverlap, "Sessions " + s1.getId() + " and " + s2.getId() +
+                            " on " + entry.getKey() + " directly overlap!");
+
+                    // Rule 2: Separation must be at least breakMinutes
+                    boolean breakViolation = s2.getStartTime().isBefore(s1.getEndTime().plusMinutes(breakMinutes));
+                    assertFalse(breakViolation, "Sessions " + s1.getId() + " (" + s1.getStartTime() + "-" + s1.getEndTime() +
+                            ") and " + s2.getId() + " (" + s2.getStartTime() + "-" + s2.getEndTime() +
+                            ") on " + entry.getKey() + " violate the required " + breakMinutes + "m break!");
+                }
+            }
+        }
+    }
+
+    @Test
+    void testGenerateSchedule_Twice_NoDuplicatesNoOverlaps() throws Exception {
+        String email = "twice_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        User user = User.builder()
+                .name("Twice Student")
+                .email(email)
+                .passwordHash("hash")
+                .emailVerified(true)
+                .build();
+        userRepository.save(user);
+        String token = jwtService.generateToken(email);
+
+        Semester semester = Semester.builder()
+                .user(user)
+                .name("Fall 2026")
+                .startDate(LocalDate.now().minusDays(5))
+                .endDate(LocalDate.now().plusMonths(3))
+                .active(true)
+                .build();
+        semesterRepository.save(semester);
+
+        Course course = Course.builder()
+                .semester(semester)
+                .name("Databases")
+                .code("CS302")
+                .creditHours(3)
+                .color("#3525CD")
+                .build();
+        courseRepository.save(course);
+
+        Task task1 = Task.builder()
+                .course(course)
+                .title("SQL Project")
+                .type(TaskType.PROJECT)
+                .priority(TaskPriority.HIGH)
+                .dueDate(LocalDate.now().plusDays(5))
+                .estimatedHours(3)
+                .completedHours(0)
+                .status(TaskStatus.TODO)
+                .build();
+        taskRepository.save(task1);
+
+        StudyPreferences preferences = StudyPreferences.builder()
+                .user(user)
+                .maxSessionMinutes(60)
+                .breakMinutes(15)
+                .preferredStudyStart(LocalTime.of(18, 0))
+                .preferredStudyEnd(LocalTime.of(22, 0))
+                .allowWeekendStudy(true)
+                .build();
+        studyPreferencesRepository.save(preferences);
+
+        for (DayOfWeekEnum day : DayOfWeekEnum.values()) {
+            Availability availability = Availability.builder()
+                    .user(user)
+                    .day(day)
+                    .startTime(LocalTime.of(18, 0))
+                    .endTime(LocalTime.of(22, 0))
+                    .enabled(true)
+                    .build();
+            availabilityRepository.save(availability);
+        }
+
+        // Run 1
+        MvcResult res1 = mockMvc.perform(post("/api/scheduler/generate")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode json1 = objectMapper.readTree(res1.getResponse().getContentAsString());
+        int count1 = json1.get("generatedSessions").asInt();
+        assertTrue(count1 > 0);
+
+        // Run 2 (immediate repeat)
+        MvcResult res2 = mockMvc.perform(post("/api/scheduler/generate")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode json2 = objectMapper.readTree(res2.getResponse().getContentAsString());
+        int count2 = json2.get("generatedSessions").asInt();
+
+        assertEquals(count1, count2, "Repeated generation must produce identical count, not duplicate");
+
+        List<StudySession> totalInDb = studySessionRepository.findFutureSessionsByUser(
+                user,
+                List.of(StudySessionStatus.PLANNED),
+                LocalDate.now()
+        );
+        assertEquals(count1, totalInDb.size(), "Total sessions in DB must equal count1, no duplicates created");
+    }
+
+    @Test
+    void testMissedSessionDetection_EndTimePassed() {
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+
+        // 1. Session ended in past today -> must become MISSED
+        StudySession pastSession = StudySession.builder()
+                .sessionDate(today)
+                .startTime(now.minusHours(2))
+                .endTime(now.minusHours(1))
+                .plannedMinutes(60)
+                .completedMinutes(0)
+                .status(StudySessionStatus.PLANNED)
+                .task(testTask)
+                .build();
+        studySessionRepository.save(pastSession);
+
+        // 2. Session currently ongoing / future today -> must remain PLANNED
+        StudySession futureSession = StudySession.builder()
+                .sessionDate(today)
+                .startTime(now.plusMinutes(10))
+                .endTime(now.plusMinutes(70))
+                .plannedMinutes(60)
+                .completedMinutes(0)
+                .status(StudySessionStatus.PLANNED)
+                .task(testTask)
+                .build();
+        studySessionRepository.save(futureSession);
+
+        // Run detection
+        missedSessionService.markMissedSessions();
+
+        StudySession updatedPast = studySessionRepository.findById(pastSession.getId()).orElseThrow();
+        assertEquals(StudySessionStatus.MISSED, updatedPast.getStatus(), "Session whose endTime passed must be MISSED");
+
+        StudySession updatedFuture = studySessionRepository.findById(futureSession.getId()).orElseThrow();
+        assertEquals(StudySessionStatus.PLANNED, updatedFuture.getStatus(), "Future session must remain PLANNED");
+    }
+
+    @Test
+    void testMultipleMissedSessions_RescheduledIntoDistinctSlots() {
+        testTask.setEstimatedHours(10);
+        testTask.setCompletedHours(0);
+        taskRepository.save(testTask);
+
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+
+        // Create 2 missed sessions from yesterday
+        StudySession missed1 = StudySession.builder()
+                .sessionDate(yesterday)
+                .startTime(LocalTime.of(10, 0))
+                .endTime(LocalTime.of(11, 0))
+                .plannedMinutes(60)
+                .completedMinutes(0)
+                .status(StudySessionStatus.MISSED)
+                .rescheduled(false)
+                .task(testTask)
+                .build();
+        studySessionRepository.save(missed1);
+
+        StudySession missed2 = StudySession.builder()
+                .sessionDate(yesterday)
+                .startTime(LocalTime.of(14, 0))
+                .endTime(LocalTime.of(15, 0))
+                .plannedMinutes(60)
+                .completedMinutes(0)
+                .status(StudySessionStatus.MISSED)
+                .rescheduled(false)
+                .task(testTask)
+                .build();
+        studySessionRepository.save(missed2);
+
+        // Run rescheduling
+        missedSessionReschedulingService.rescheduleMissedSessions();
+
+        StudySession updatedMissed1 = studySessionRepository.findById(missed1.getId()).orElseThrow();
+        StudySession updatedMissed2 = studySessionRepository.findById(missed2.getId()).orElseThrow();
+
+        assertTrue(updatedMissed1.isRescheduled(), "Missed 1 should be marked rescheduled");
+        assertTrue(updatedMissed2.isRescheduled(), "Missed 2 should be marked rescheduled");
+
+        List<StudySession> replacements = studySessionRepository.findByTask(testTask).stream()
+                .filter(s -> s.getStatus() == StudySessionStatus.PLANNED)
+                .toList();
+
+        assertTrue(replacements.size() >= 2, "Both missed sessions should have replacements");
+
+        // Verify replacements do not overlap each other
+        for (int i = 0; i < replacements.size(); i++) {
+            for (int j = i + 1; j < replacements.size(); j++) {
+                StudySession r1 = replacements.get(i);
+                StudySession r2 = replacements.get(j);
+                if (r1.getSessionDate().equals(r2.getSessionDate())) {
+                    boolean overlap = r1.getStartTime().isBefore(r2.getEndTime())
+                            && r2.getStartTime().isBefore(r1.getEndTime());
+                    assertFalse(overlap, "Replacements on " + r1.getSessionDate() + " must never overlap!");
+                }
+            }
+        }
+    }
+
+    @Test
+    void testNoAvailableSpace_RemainsMissedWithoutForcedOverlap() {
+        String email = "full_avail_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        User user = User.builder()
+                .name("No Space Student")
+                .email(email)
+                .passwordHash("hash")
+                .emailVerified(true)
+                .build();
+        userRepository.save(user);
+
+        Semester semester = Semester.builder()
+                .user(user)
+                .name("Fall 2026")
+                .startDate(LocalDate.now().minusDays(5))
+                .endDate(LocalDate.now().plusMonths(3))
+                .active(true)
+                .build();
+        semesterRepository.save(semester);
+
+        Course course = Course.builder()
+                .semester(semester)
+                .name("Full Course")
+                .code("FC101")
+                .creditHours(3)
+                .color("#3525CD")
+                .build();
+        courseRepository.save(course);
+
+        Task task = Task.builder()
+                .course(course)
+                .title("No Slot Task")
+                .type(TaskType.ASSIGNMENT)
+                .priority(TaskPriority.HIGH)
+                .dueDate(LocalDate.now().plusDays(2))
+                .estimatedHours(5)
+                .completedHours(0)
+                .status(TaskStatus.TODO)
+                .build();
+        taskRepository.save(task);
+
+        StudyPreferences preferences = StudyPreferences.builder()
+                .user(user)
+                .maxSessionMinutes(60)
+                .breakMinutes(15)
+                .preferredStudyStart(LocalTime.of(18, 0))
+                .preferredStudyEnd(LocalTime.of(19, 0))
+                .allowWeekendStudy(true)
+                .build();
+        studyPreferencesRepository.save(preferences);
+
+        // Only 1 hour available per day (18:00 to 19:00)
+        for (DayOfWeekEnum day : DayOfWeekEnum.values()) {
+            Availability availability = Availability.builder()
+                    .user(user)
+                    .day(day)
+                    .startTime(LocalTime.of(18, 0))
+                    .endTime(LocalTime.of(19, 0))
+                    .enabled(true)
+                    .build();
+            availabilityRepository.save(availability);
+        }
+
+        // Fill all 7 candidate days at 18:00-19:00 with COMPLETED sessions
+        for (int i = 0; i < 7; i++) {
+            StudySession occupying = StudySession.builder()
+                    .sessionDate(LocalDate.now().plusDays(i))
+                    .startTime(LocalTime.of(18, 0))
+                    .endTime(LocalTime.of(19, 0))
+                    .plannedMinutes(60)
+                    .completedMinutes(60)
+                    .status(StudySessionStatus.COMPLETED)
+                    .task(task)
+                    .build();
+            studySessionRepository.save(occupying);
+        }
+
+        // Now create a missed session that needs rescheduling
+        StudySession missed = StudySession.builder()
+                .sessionDate(LocalDate.now().minusDays(1))
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(19, 0))
+                .plannedMinutes(60)
+                .completedMinutes(0)
+                .status(StudySessionStatus.MISSED)
+                .rescheduled(false)
+                .task(task)
+                .build();
+        studySessionRepository.save(missed);
+
+        // Attempt rescheduling
+        missedSessionReschedulingService.rescheduleMissedSessions();
+
+        StudySession checkMissed = studySessionRepository.findById(missed.getId()).orElseThrow();
+        assertEquals(StudySessionStatus.MISSED, checkMissed.getStatus(), "Status must remain MISSED");
+        assertFalse(checkMissed.isRescheduled(), "Must NOT be marked rescheduled when no slot exists");
+
+        // Verify no extra PLANNED sessions were forced
+        long plannedCount = studySessionRepository.findByTask(task).stream()
+                .filter(s -> s.getStatus() == StudySessionStatus.PLANNED)
+                .count();
+        assertEquals(0, plannedCount, "No overlapping sessions should be forced into full schedule");
     }
 }
