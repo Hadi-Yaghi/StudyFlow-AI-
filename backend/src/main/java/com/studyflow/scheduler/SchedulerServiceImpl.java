@@ -29,6 +29,9 @@ public class SchedulerServiceImpl implements SchedulerService {
     private final SessionGenerator sessionGenerator;
     private final ScheduleConflictValidator scheduleConflictValidator;
 
+    private final com.studyflow.service.SubscriptionService subscriptionService;
+    private final com.studyflow.service.ScheduleUsageService scheduleUsageService;
+
     @Override
     @Transactional
     public SchedulerResult generateSchedule(String email) {
@@ -40,6 +43,22 @@ public class SchedulerServiceImpl implements SchedulerService {
                 .orElseThrow(() -> new RuntimeException("User not found: " + email));
 
         log.info("Authenticated user ID: {}", user.getId());
+
+        boolean isPro = subscriptionService.isPro(user);
+        log.info("User {} Pro status: {}", email, isPro);
+
+        if (!isPro) {
+            boolean canGenerate = scheduleUsageService.canUserGenerate(user, false);
+            if (!canGenerate) {
+                log.warn("User {} has used all free schedule generations for current period.", email);
+                throw new com.studyflow.exception.ScheduleLimitReachedException(
+                        "You've used your free schedule generations."
+                );
+            }
+            log.info("Free quota check passed for user {}. Remaining: {}", email, scheduleUsageService.getRemainingFreeGenerations(user));
+        } else {
+            log.info("Pro user {} bypassing free schedule generation quota.", email);
+        }
 
         LocalDate today = LocalDate.now();
         log.info("Current scheduling date (today): {}", today);
@@ -67,7 +86,7 @@ public class SchedulerServiceImpl implements SchedulerService {
                 log.info("No active semester flag set; falling back to all user semesters: count={}", activeSemesters.size());
             } else {
                 log.warn("No semesters found for user ID: {}. Schedule generation aborted.", user.getId());
-                return buildFailureResult("NO_ACTIVE_SEMESTER", "No active semester found. Please create or activate a semester.");
+                return buildFailureResult("NO_ACTIVE_SEMESTER", "No active semester found. Please create or activate a semester.", user, isPro);
             }
         }
 
@@ -86,7 +105,7 @@ public class SchedulerServiceImpl implements SchedulerService {
 
         if (courses.isEmpty()) {
             log.warn("No courses found for user ID: {}. Schedule generation aborted.", user.getId());
-            return buildFailureResult("NO_ACTIVE_TASKS", "No courses found in your active semester. Please add courses first.");
+            return buildFailureResult("NO_ACTIVE_TASKS", "No courses found in your active semester. Please add courses first.", user, isPro);
         }
 
         // 3. Task Checks & Eligibility
@@ -138,15 +157,15 @@ public class SchedulerServiceImpl implements SchedulerService {
 
         if (eligibleTasks.isEmpty()) {
             if (allTasks.isEmpty()) {
-                return buildFailureResult("NO_ACTIVE_TASKS", "No tasks found for your courses. Please add tasks to generate a schedule.");
+                return buildFailureResult("NO_ACTIVE_TASKS", "No tasks found for your courses. Please add tasks to generate a schedule.", user, isPro);
             }
             if (completedCount == allTasks.size() || (completedCount + zeroRemainingCount) == allTasks.size()) {
-                return buildFailureResult("NO_REMAINING_TASK_TIME", "All tasks are already completed or have no remaining time.");
+                return buildFailureResult("NO_REMAINING_TASK_TIME", "All tasks are already completed or have no remaining time.", user, isPro);
             }
             if (pastDueCount > 0) {
-                return buildFailureResult("TASKS_OUTSIDE_DATE_RANGE", "All existing tasks have due dates that have already passed.");
+                return buildFailureResult("TASKS_OUTSIDE_DATE_RANGE", "All existing tasks have due dates that have already passed.", user, isPro);
             }
-            return buildFailureResult("NO_ACTIVE_TASKS", "No eligible tasks found. Please verify your task due dates and estimated hours.");
+            return buildFailureResult("NO_ACTIVE_TASKS", "No eligible tasks found. Please verify your task due dates and estimated hours.", user, isPro);
         }
 
         // 4. Study Preferences Check
@@ -169,13 +188,13 @@ public class SchedulerServiceImpl implements SchedulerService {
 
         if (availabilities.isEmpty()) {
             log.warn("Zero availability entries configured for user ID: {}. Returning NO_AVAILABILITY.", user.getId());
-            return buildFailureResult("NO_AVAILABILITY", "No study availability configured. Please set your weekly study availability in Profile > Availability.");
+            return buildFailureResult("NO_AVAILABILITY", "No study availability configured. Please set your weekly study availability in Profile > Availability.", user, isPro);
         }
 
         boolean anyEnabled = availabilities.stream().anyMatch(Availability::isEnabled);
         if (!anyEnabled) {
             log.warn("All availability entries are disabled for user ID: {}. Returning NO_AVAILABLE_TIME.", user.getId());
-            return buildFailureResult("NO_AVAILABLE_TIME", "All study availability days are disabled. Please enable study days in Profile > Availability.");
+            return buildFailureResult("NO_AVAILABLE_TIME", "All study availability days are disabled. Please enable study days in Profile > Availability.", user, isPro);
         }
 
         // Remove previously generated PLANNED sessions for these tasks before re-generating
@@ -344,10 +363,22 @@ public class SchedulerServiceImpl implements SchedulerService {
 
         if (generatedSessions.isEmpty()) {
             if (totalAvailableMinutesAcrossHorizon == 0) {
-                return buildFailureResult("NO_AVAILABLE_TIME", "No available study time found within your preferred hours and availability window.");
+                return buildFailureResult("NO_AVAILABLE_TIME", "No available study time found within your preferred hours and availability window.", user, isPro);
             }
-            return buildFailureResult("TASKS_OUTSIDE_DATE_RANGE", "No sessions could be scheduled. Your tasks may be due before the next available study slot.");
+            return buildFailureResult("TASKS_OUTSIDE_DATE_RANGE", "No sessions could be scheduled. Your tasks may be due before the next available study slot.", user, isPro);
         }
+
+        // Record usage ONLY if actual generation succeeds
+        scheduleUsageService.recordGenerationUsage(
+                user,
+                ScheduleGenerationType.STANDARD,
+                true,
+                generatedSessions.size(),
+                "Successfully scheduled " + generatedSessions.size() + " study sessions"
+        );
+
+        int remaining = isPro ? -1 : scheduleUsageService.getRemainingFreeGenerations(user);
+        int used = (int) scheduleUsageService.getUsedFreeGenerationsInCurrentPeriod(user);
 
         return SchedulerResult.builder()
                 .generatedSessions(generatedSessions.size())
@@ -358,10 +389,16 @@ public class SchedulerServiceImpl implements SchedulerService {
                 .status("SUCCESS")
                 .message("Successfully scheduled " + generatedSessions.size() + " study sessions.")
                 .failureReason(null)
+                .remainingFreeGenerations(remaining)
+                .generatedCount(used)
+                .pro(isPro)
                 .build();
     }
 
-    private SchedulerResult buildFailureResult(String status, String message) {
+    private SchedulerResult buildFailureResult(String status, String message, User user, boolean isPro) {
+        int remaining = (user != null && !isPro) ? scheduleUsageService.getRemainingFreeGenerations(user) : -1;
+        int used = (user != null) ? (int) scheduleUsageService.getUsedFreeGenerationsInCurrentPeriod(user) : 0;
+
         return SchedulerResult.builder()
                 .generatedSessions(0)
                 .scheduledMinutes(0)
@@ -371,6 +408,9 @@ public class SchedulerServiceImpl implements SchedulerService {
                 .status(status)
                 .message(message)
                 .failureReason(status)
+                .remainingFreeGenerations(remaining)
+                .generatedCount(used)
+                .pro(isPro)
                 .build();
     }
 }

@@ -47,6 +47,10 @@ class ApiConfig {
   // Study Preferences endpoint
   static String get preferencesUrl => '$baseUrl/api/study-preferences';
 
+  // Subscription endpoints
+  static String get subscriptionStatusUrl => '$baseUrl/api/subscription/status';
+  static String get subscriptionSyncUrl => '$baseUrl/api/subscription/sync';
+
   // Schedule Usage endpoint
   static String get scheduleUsageUrl => '$baseUrl/api/scheduler/usage';
 

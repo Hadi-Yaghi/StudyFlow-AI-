@@ -10,8 +10,10 @@ import '../widgets/profile_option_tile.dart';
 import 'account_settings_screen.dart';
 import 'availability_settings_screen.dart';
 import 'login_screen.dart';
+import 'premium_screen.dart';
 import 'study_preferences_screen.dart';
 import '../services/notification_service.dart';
+import '../services/revenuecat_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -36,8 +38,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    RevenueCatService.instance.addListener(_onRcStateChanged);
     _loadUser();
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    RevenueCatService.instance.removeListener(_onRcStateChanged);
+    super.dispose();
+  }
+
+  void _onRcStateChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadUser() async {
@@ -476,7 +489,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
+
+              // Subscription Plan Card (Free vs Pro)
+              _buildPlanCard(context, isDark, RevenueCatService.instance.isPro),
+              const SizedBox(height: 20),
 
               // Settings Box Container
               Container(
@@ -497,6 +514,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: Column(
                   children: [
+                    ProfileOptionTile(
+                      icon: Icons.workspace_premium_outlined,
+                      title: "Subscription",
+                      subtitle: switch (RevenueCatService.instance.subscriptionStatus) {
+                        ProSubscriptionStatus.trial =>
+                          "StudyFlow Pro (Free Trial Active)",
+                        ProSubscriptionStatus.cancelledActive =>
+                          "StudyFlow Pro (Cancelled - Active until ${RevenueCatService.instance.formattedExpirationDate ?? 'end of period'})",
+                        ProSubscriptionStatus.activePaid =>
+                          "StudyFlow Pro (Active)",
+                        ProSubscriptionStatus.free =>
+                          "Free Plan - Upgrade Available",
+                      },
+                      onTap: () {
+                        if (RevenueCatService.instance.isPro) {
+                          RevenueCatService.instance.presentCustomerCenter();
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const PremiumScreen()),
+                          );
+                        }
+                      },
+                    ),
                     ProfileOptionTile(
                       icon: Icons.person_outline,
                       title: "Edit Profile",
@@ -628,6 +669,205 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlanCard(BuildContext context, bool isDark, bool isPro) {
+    if (isPro) {
+      final status = RevenueCatService.instance.subscriptionStatus;
+      final exp = RevenueCatService.instance.formattedExpirationDate;
+
+      final String badgeText;
+      final Color badgeColor;
+      final String statusSubtext;
+
+      switch (status) {
+        case ProSubscriptionStatus.trial:
+          badgeText = 'TRIAL';
+          badgeColor = const Color(0xFF10B981);
+          statusSubtext = exp != null ? 'Free Trial • Renews $exp' : 'Free Trial Active • Manage >';
+          break;
+        case ProSubscriptionStatus.cancelledActive:
+          badgeText = 'CANCELLED';
+          badgeColor = const Color(0xFFF59E0B);
+          statusSubtext = exp != null ? 'Active until $exp (Cancelled)' : 'Access Active (Will not renew)';
+          break;
+        case ProSubscriptionStatus.activePaid:
+        default:
+          badgeText = 'PRO';
+          badgeColor = const Color(0xFF10B981);
+          statusSubtext = exp != null ? 'Renews $exp • Manage >' : 'Manage Subscription >';
+          break;
+      }
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF151D2E) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: badgeColor.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                status == ProSubscriptionStatus.cancelledActive
+                    ? Icons.access_time_filled_rounded
+                    : Icons.verified_rounded,
+                color: badgeColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Plan: StudyFlow Pro',
+                        style: TextStyle(
+                          color: isDark ? Colors.white : const Color(0xFF111827),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: badgeColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          badgeText,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: badgeColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  GestureDetector(
+                    onTap: () => RevenueCatService.instance.presentCustomerCenter(),
+                    child: Text(
+                      statusSubtext,
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF818CF8) : const Color(0xFF3525CD),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              color: const Color(0xFF3525CD),
+              tooltip: 'Manage Subscription',
+              onPressed: () => RevenueCatService.instance.presentCustomerCenter(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Free User Card
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PremiumScreen()),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF3525CD), Color(0xFF5B21B6)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF3525CD).withValues(alpha: 0.3),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.workspace_premium_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Plan: Free',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Upgrade to StudyFlow Pro >',
+                    style: TextStyle(
+                      color: Color(0xFFE0E7FF),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white,
+              size: 16,
+            ),
+          ],
         ),
       ),
     );

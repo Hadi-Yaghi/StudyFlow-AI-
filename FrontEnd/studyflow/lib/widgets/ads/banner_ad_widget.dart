@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../services/ad_service.dart';
+import '../../services/revenuecat_service.dart';
 
 /// A reusable, self-contained Banner Ad widget for StudyFlow.
 ///
@@ -9,7 +10,8 @@ import '../../services/ad_service.dart';
 /// - Loads asynchronously without blocking the UI thread
 /// - Renders [SizedBox.shrink] while loading or if loading fails (no blank gaps)
 /// - Properly disposes [BannerAd] when the widget unmounts
-/// - Automatically respects [AdService.instance.adsEnabled]
+/// - Automatically respects [AdService.instance.adsEnabled] and [RevenueCatService.instance.isPro]
+/// - Collapses immediately when Pro is unlocked without requiring an app restart
 /// - Styled with subtle margin and borders to feel integrated into StudyFlow
 class BannerAdWidget extends StatefulWidget {
   /// Optional margin around the banner ad container.
@@ -36,7 +38,22 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   @override
   void initState() {
     super.initState();
+    RevenueCatService.instance.addListener(_onProStatusChanged);
     _loadBanner();
+  }
+
+  void _onProStatusChanged() {
+    if (RevenueCatService.instance.isPro) {
+      if (mounted) {
+        setState(() {
+          _bannerAd?.dispose();
+          _bannerAd = null;
+          _isLoaded = false;
+        });
+      }
+    } else if (_bannerAd == null && !_isLoaded && !_hasFailed) {
+      _loadBanner();
+    }
   }
 
   void _loadBanner() {
@@ -85,6 +102,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   @override
   void dispose() {
+    RevenueCatService.instance.removeListener(_onProStatusChanged);
     _bannerAd?.dispose();
     _bannerAd = null;
     super.dispose();

@@ -11,7 +11,10 @@ import 'study_session_screen.dart';
 import 'availability_settings_screen.dart';
 import '../services/ad_service.dart';
 import '../services/notification_service.dart';
+import '../services/feature_access_service.dart';
+import '../utils/feature_gate.dart';
 import '../widgets/ads/banner_ad_widget.dart';
+import 'premium_screen.dart';
 
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
@@ -31,6 +34,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   void initState() {
     super.initState();
     _loadSessions();
+    FeatureGate.access.refreshScheduleUsage();
+    FeatureGate.access.addListener(_onFeatureAccessChanged);
+  }
+
+  @override
+  void dispose() {
+    FeatureGate.access.removeListener(_onFeatureAccessChanged);
+    super.dispose();
+  }
+
+  void _onFeatureAccessChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   String _formatDate(DateTime date) {
@@ -76,6 +93,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Future<void> _handleGenerateSchedule() async {
     if (_isGenerating) return;
 
+    // RULE: Free users are restricted to 3 generations per period
+    if (!FeatureGate.access.isPro && FeatureGate.access.remainingFreeScheduleGenerations == 0) {
+      FeatureGate.showScheduleLimitReachedDialog(context);
+      return;
+    }
+
     setState(() {
       _isGenerating = true;
     });
@@ -89,18 +112,25 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         'Schedule generation succeeded: ${result.generatedSessions} sessions across ${result.sessionDates}',
         name: 'ScheduleScreen',
       );
+      // Refresh usage counter
+      FeatureGate.access.refreshScheduleUsage();
     } catch (e) {
       developer.log('Schedule generation failed: $e', name: 'ScheduleScreen');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.red,
-          ),
-        );
         setState(() {
           _isGenerating = false;
         });
+
+        if (e.toString().contains('SCHEDULE_GENERATION_LIMIT_REACHED')) {
+          FeatureGate.showScheduleLimitReachedDialog(context);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
       return;
     }
@@ -336,41 +366,79 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     }),
                     const SizedBox(height: 20),
 
-                    // Generate / Re-generate Schedule Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3525CD),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: _isGenerating ? null : _handleGenerateSchedule,
-                        icon: _isGenerating
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
+                    // Free Quota / Pro Indicator
+                    _buildQuotaIndicator(),
+
+                    // Generate / Re-generate Schedule Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: SizedBox(
+                            height: 52,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF3525CD),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
-                              )
-                            : const Icon(
-                                Icons.auto_awesome,
-                                color: Colors.white,
-                                size: 20,
                               ),
-                        label: Text(
-                          _isGenerating ? "Generating..." : "Generate Schedule",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                              onPressed: _isGenerating ? null : _handleGenerateSchedule,
+                              icon: _isGenerating
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.calendar_month_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                              label: Text(
+                                _isGenerating ? "Generating..." : "Generate",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: SizedBox(
+                            height: 52,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: const Color(0xFF3525CD).withOpacity(0.3)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed: _handleGenerateWithAi,
+                              icon: const Icon(
+                                Icons.auto_awesome,
+                                color: Color(0xFF3525CD),
+                                size: 16,
+                              ),
+                              label: const Text(
+                                "AI Plan",
+                                style: TextStyle(
+                                  color: Color(0xFF3525CD),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     const BannerAdWidget(),
@@ -447,43 +515,203 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
 
-          // Generate Schedule Button
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3525CD),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            onPressed: _isGenerating ? null : _handleGenerateSchedule,
-            icon: _isGenerating
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Icon(
-                    Icons.auto_awesome,
-                    color: Colors.white,
-                    size: 18,
+          // Quota indicator in empty state
+          _buildQuotaIndicator(),
+          const SizedBox(height: 12),
+
+          // Generate Schedule & AI Planner Buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3525CD),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
-            label: Text(
-              _isGenerating ? "Generating..." : "Generate Schedule",
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+                ),
+                onPressed: _isGenerating ? null : _handleGenerateSchedule,
+                icon: _isGenerating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.calendar_month_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                label: Text(
+                  _isGenerating ? "Generating..." : "Generate Schedule",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  side: BorderSide(color: const Color(0xFF3525CD).withOpacity(0.3)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: _handleGenerateWithAi,
+                icon: const Icon(
+                  Icons.auto_awesome,
+                  color: Color(0xFF3525CD),
+                  size: 16,
+                ),
+                label: const Text(
+                  "AI Plan",
+                  style: TextStyle(
+                    color: Color(0xFF3525CD),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           const BannerAdWidget(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuotaIndicator() {
+    final isPro = FeatureGate.access.isPro;
+    final remaining = FeatureGate.access.remainingFreeScheduleGenerations;
+    const limit = FeatureAccessService.freeScheduleGenerationLimit;
+
+    if (isPro) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.amber.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.stars_rounded, size: 16, color: Colors.amber.shade800),
+            const SizedBox(width: 6),
+            Text(
+              "StudyFlow Pro • Unlimited Generations",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.amber.shade900,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final isExhausted = remaining <= 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isExhausted ? Colors.red.shade50 : const Color(0xFF3525CD).withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isExhausted ? Colors.red.shade200 : const Color(0xFF3525CD).withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            isExhausted ? Icons.lock_clock : Icons.refresh_rounded,
+            size: 16,
+            color: isExhausted ? Colors.red.shade700 : const Color(0xFF3525CD),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            isExhausted
+                ? "Free quota used (0/$limit remaining)"
+                : "Free Generations: $remaining of $limit remaining",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isExhausted ? Colors.red.shade800 : const Color(0xFF3525CD),
+            ),
+          ),
+          if (isExhausted) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PremiumScreen()),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade700,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  "Upgrade",
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _handleGenerateWithAi() {
+    if (!FeatureGate.access.canGenerateWithAi) {
+      FeatureGate.requirePro(
+        context,
+        onUnlocked: () => _handleGenerateWithAi(),
+        featureName: "AI Study Planning",
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.auto_awesome, color: Color(0xFF3525CD)),
+            SizedBox(width: 10),
+            Text("AI Study Planner"),
+          ],
+        ),
+        content: const Text(
+          "AI Study Planning analyzes your uploaded course documents (syllabi, slides, notes) to create optimal study plans.\n\nOpen any Course in the Courses tab and tap 'Resources' to upload documents and generate an AI plan.",
+          style: TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3525CD),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Got It"),
+          ),
         ],
       ),
     );

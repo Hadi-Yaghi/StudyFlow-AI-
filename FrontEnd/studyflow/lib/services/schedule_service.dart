@@ -5,6 +5,8 @@ import '../core/network/api_client.dart';
 import '../models/scheduler_result_model.dart';
 import '../models/study_session_model.dart';
 
+import 'feature_access_service.dart';
+
 class ScheduleService {
   final ApiClient _apiClient = ApiClient();
 
@@ -112,7 +114,13 @@ class ScheduleService {
       );
       developer.log('Schedule generation response: status ${response.statusCode}, data: ${response.data}', name: 'ScheduleService');
       if (response.data is Map<String, dynamic>) {
-        return SchedulerResultModel.fromJson(response.data);
+        final result = SchedulerResultModel.fromJson(response.data);
+        // Synchronize quota state with FeatureAccessService
+        FeatureAccessService.instance.updateFromSchedulerResult(
+          remaining: result.remainingFreeGenerations,
+          used: result.generatedCount,
+        );
+        return result;
       }
       return SchedulerResultModel(
         generatedSessions: 0,
@@ -121,6 +129,13 @@ class ScheduleService {
         sessionDates: [],
       );
     } on DioException catch (e) {
+      if (e.response?.data is Map) {
+        final data = e.response!.data as Map;
+        final error = data['error']?.toString();
+        if (error == 'SCHEDULE_GENERATION_LIMIT_REACHED') {
+          throw Exception('SCHEDULE_GENERATION_LIMIT_REACHED');
+        }
+      }
       final errorMsg = _extractErrorMessage(e, 'Failed to generate schedule');
       developer.log('DioException generating schedule: $errorMsg', name: 'ScheduleService');
       throw Exception(errorMsg);

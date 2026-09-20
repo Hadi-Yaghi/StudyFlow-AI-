@@ -27,4 +27,10 @@ public class SchedulerResult {
     private String message;
 
     private String failureReason;
+
+    private int remainingFreeGenerations;
+
+    private int generatedCount;
+
+    private boolean pro;
 }

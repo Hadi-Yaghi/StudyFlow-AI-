@@ -7,6 +7,9 @@ class SchedulerResultModel {
   final String? status;
   final String? message;
   final String? failureReason;
+  final int remainingFreeGenerations;
+  final int generatedCount;
+  final bool isPro;
 
   SchedulerResultModel({
     required this.generatedSessions,
@@ -17,6 +20,9 @@ class SchedulerResultModel {
     this.status,
     this.message,
     this.failureReason,
+    this.remainingFreeGenerations = -1,
+    this.generatedCount = 0,
+    this.isPro = false,
   });
 
   factory SchedulerResultModel.fromJson(Map<String, dynamic> json) {
@@ -42,6 +48,13 @@ class SchedulerResultModel {
       status: json['status']?.toString(),
       message: json['message']?.toString(),
       failureReason: json['failureReason']?.toString(),
+      remainingFreeGenerations: json['remainingFreeGenerations'] is int
+          ? json['remainingFreeGenerations']
+          : int.tryParse(json['remainingFreeGenerations']?.toString() ?? '') ?? -1,
+      generatedCount: json['generatedCount'] is int
+          ? json['generatedCount']
+          : int.tryParse(json['generatedCount']?.toString() ?? '') ?? 0,
+      isPro: json['isPro'] as bool? ?? false,
     );
   }
 }

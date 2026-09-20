@@ -5,6 +5,7 @@ import '../core/network/api_client.dart';
 import '../core/storage/token_storage.dart';
 import '../models/auth_response_model.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'revenuecat_service.dart';
 
 class AuthService {
   final ApiClient _apiClient = ApiClient();
@@ -67,6 +68,7 @@ class AuthService {
           email: authData.email,
           major: authData.major,
         );
+        await RevenueCatService.instance.logIn(authData.userId);
         return authData;
       } else {
         throw Exception(_extractErrorMessage(response.data, 'Login failed'));
@@ -105,6 +107,7 @@ class AuthService {
             email: authData.email,
             major: authData.major,
           );
+          await RevenueCatService.instance.logIn(authData.userId);
         }
         return authData;
       } else {
@@ -143,6 +146,7 @@ class AuthService {
           email: authData.email,
           major: authData.major,
         );
+        await RevenueCatService.instance.logIn(authData.userId);
         return authData;
       } else {
         throw Exception(_extractErrorMessage(response.data, 'Google sign-in failed'));
@@ -179,6 +183,7 @@ class AuthService {
           email: authData.email,
           major: authData.major,
         );
+        await RevenueCatService.instance.logIn(authData.userId);
         return authData;
       } else {
         throw Exception(_extractErrorMessage(response.data, 'Verification failed'));
@@ -283,6 +288,7 @@ class AuthService {
     } catch (_) {
       // Best effort Google sign-out
     }
+    await RevenueCatService.instance.logOut();
     await TokenStorage.deleteToken();
   }
 }
