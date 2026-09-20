@@ -19,3 +19,19 @@ CREATE TABLE IF NOT EXISTS course_materials (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS ai_usage_logs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    request_type VARCHAR(50) NOT NULL,
+    provider VARCHAR(50) NOT NULL,
+    model VARCHAR(100),
+    prompt_tokens INT,
+    completion_tokens INT,
+    total_tokens INT,
+    successful BOOLEAN NOT NULL DEFAULT false,
+    error_message VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

@@ -51,4 +51,7 @@ class ApiConfig {
   static String getCourseMaterialsUrl(int courseId) => '$baseUrl/api/courses/$courseId/materials';
   static String getCourseMaterialDownloadUrl(int courseId, int materialId) => '$baseUrl/api/courses/$courseId/materials/$materialId/download';
   static String getCourseMaterialDeleteUrl(int courseId, int materialId) => '$baseUrl/api/courses/$courseId/materials/$materialId';
+
+  // AI Study Plan endpoint
+  static String getAiPlanUrl(int courseId) => '$baseUrl/api/ai/courses/$courseId/plan';
 }
