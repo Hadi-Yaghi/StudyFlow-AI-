@@ -13,3 +13,7 @@ google-services.json
 .env
 .env.*
 !.env.example
+
+# Uploaded user course materials
+uploads/
+backend/uploads/

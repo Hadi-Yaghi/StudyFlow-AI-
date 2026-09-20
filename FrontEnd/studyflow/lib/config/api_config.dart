@@ -1,7 +1,7 @@
 class ApiConfig {
   // Base URL for backend server
   // Use 10.0.2.2 for Android Emulator, localhost for Desktop/Web/iOS, or your PC IP
-  static String baseUrl = 'http://192.168.0.101:8081';
+  static String baseUrl = 'http://192.168.10.106:8081';
 
   // Auth endpoints
   static String get loginUrl => '$baseUrl/api/auth/login';
@@ -46,4 +46,9 @@ class ApiConfig {
 
   // Study Preferences endpoint
   static String get preferencesUrl => '$baseUrl/api/study-preferences';
+
+  // Course Materials endpoints
+  static String getCourseMaterialsUrl(int courseId) => '$baseUrl/api/courses/$courseId/materials';
+  static String getCourseMaterialDownloadUrl(int courseId, int materialId) => '$baseUrl/api/courses/$courseId/materials/$materialId/download';
+  static String getCourseMaterialDeleteUrl(int courseId, int materialId) => '$baseUrl/api/courses/$courseId/materials/$materialId';
 }

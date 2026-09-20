@@ -3,3 +3,19 @@ ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS major varchar(100);
 ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS google_id varchar(100);
 ALTER TABLE IF EXISTS users ALTER COLUMN password_hash DROP NOT NULL;
 UPDATE users SET email_verified = true WHERE email_verified IS NULL;
+
+CREATE TABLE IF NOT EXISTS course_materials (
+    id BIGSERIAL PRIMARY KEY,
+    course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    original_filename VARCHAR(255) NOT NULL,
+    storage_key VARCHAR(255) NOT NULL UNIQUE,
+    mime_type VARCHAR(100) NOT NULL,
+    file_size BIGINT NOT NULL,
+    uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    extracted_text TEXT,
+    processing_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    error_message VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
