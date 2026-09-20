@@ -47,6 +47,9 @@ class ApiConfig {
   // Study Preferences endpoint
   static String get preferencesUrl => '$baseUrl/api/study-preferences';
 
+  // Schedule Usage endpoint
+  static String get scheduleUsageUrl => '$baseUrl/api/scheduler/usage';
+
   // Course Materials endpoints
   static String getCourseMaterialsUrl(int courseId) => '$baseUrl/api/courses/$courseId/materials';
   static String getCourseMaterialDownloadUrl(int courseId, int materialId) => '$baseUrl/api/courses/$courseId/materials/$materialId/download';
