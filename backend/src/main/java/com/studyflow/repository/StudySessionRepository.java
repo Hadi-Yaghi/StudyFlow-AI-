@@ -58,6 +58,19 @@ public interface StudySessionRepository
             List<StudySessionStatus> statuses
     );
 
+    void deleteByTask(Task task);
+
+    void deleteByTaskAndSessionDateAfterAndStatus(
+            Task task,
+            LocalDate sessionDate,
+            StudySessionStatus status
+    );
+
+    void deleteByTaskAndStatus(
+            Task task,
+            StudySessionStatus status
+    );
+
     List<StudySession> findBySessionDateAndEndTimeBeforeAndStatus(
             LocalDate sessionDate,
             LocalTime endTime,

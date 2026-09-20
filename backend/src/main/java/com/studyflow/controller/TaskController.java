@@ -70,4 +70,32 @@ public class TaskController {
                 status
         );
     }
+
+    @PutMapping("/{taskId}")
+    public TaskResponse updateTask(
+            @PathVariable Long taskId,
+            @Valid @RequestBody com.studyflow.dto.request.TaskUpdateRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        return taskService.updateTask(
+                userPrincipal.getUser().getId(),
+                taskId,
+                request
+        );
+    }
+
+    @DeleteMapping("/{taskId}")
+    public org.springframework.http.ResponseEntity<java.util.Map<String, String>> deleteTask(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        taskService.deleteTask(
+                userPrincipal.getUser().getId(),
+                taskId
+        );
+
+        return org.springframework.http.ResponseEntity.ok(
+                java.util.Map.of("message", "Task deleted successfully")
+        );
+    }
 }

@@ -28,6 +28,7 @@ class ApiConfig {
 
   // Tasks endpoints
   static String get tasksUrl => '$baseUrl/api/tasks';
+  static String taskItemUrl(int taskId) => '$baseUrl/api/tasks/$taskId';
   static String getCourseTasksUrl(int courseId) => '$baseUrl/api/tasks/course/$courseId';
   static String updateTaskStatusUrl(int taskId) => '$baseUrl/api/tasks/$taskId/status';
 

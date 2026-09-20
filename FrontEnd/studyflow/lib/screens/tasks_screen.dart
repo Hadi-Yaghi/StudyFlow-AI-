@@ -276,8 +276,15 @@ class _TasksScreenState extends State<TasksScreen> {
                             ),
                             items: const [
                               DropdownMenuItem(value: 'ASSIGNMENT', child: Text('Assignment')),
+                              DropdownMenuItem(value: 'HOMEWORK', child: Text('Homework')),
+                              DropdownMenuItem(value: 'QUIZ', child: Text('Quiz')),
+                              DropdownMenuItem(value: 'MIDTERM', child: Text('Midterm')),
+                              DropdownMenuItem(value: 'FINAL', child: Text('Final')),
                               DropdownMenuItem(value: 'EXAM', child: Text('Exam')),
+                              DropdownMenuItem(value: 'PROJECT', child: Text('Project')),
+                              DropdownMenuItem(value: 'LAB', child: Text('Lab')),
                               DropdownMenuItem(value: 'READING', child: Text('Reading')),
+                              DropdownMenuItem(value: 'OTHER', child: Text('Other')),
                             ],
                             onChanged: (val) {
                               if (val != null) {
@@ -439,9 +446,18 @@ class _TasksScreenState extends State<TasksScreen> {
                                     });
                                   }
                                   if (mounted) {
+                                    String msg = e.toString().replaceAll('Exception: ', '').trim();
+                                    if (msg.contains('Cannot deserialize') ||
+                                        msg.contains('TaskType') ||
+                                        msg.contains('Invalid task type') ||
+                                        msg.contains('com.') ||
+                                        msg.contains('org.') ||
+                                        msg.contains('<EOL>')) {
+                                      msg = "Unable to save the task. Please check the task type and try again.";
+                                    }
                                     messenger.showSnackBar(
                                       SnackBar(
-                                        content: Text(e.toString().replaceAll('Exception: ', '')),
+                                        content: Text(msg),
                                         backgroundColor: Colors.red,
                                       ),
                                     );
@@ -637,6 +653,7 @@ class _TasksScreenState extends State<TasksScreen> {
                                             Navigator.of(context).push(
                                               MaterialPageRoute(
                                                 builder: (context) => TaskDetailsScreen(
+                                                  task: task,
                                                   title: task.title,
                                                   category: categoryName,
                                                   dueDate: _formatDueDate(task.dueDate),

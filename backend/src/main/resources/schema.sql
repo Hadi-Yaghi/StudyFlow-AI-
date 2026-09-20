@@ -4,6 +4,32 @@ ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS google_id varchar(100);
 ALTER TABLE IF EXISTS users ALTER COLUMN password_hash DROP NOT NULL;
 UPDATE users SET email_verified = true WHERE email_verified IS NULL;
 
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    entitlement VARCHAR(100) NOT NULL DEFAULT 'studyflow_pro',
+    status VARCHAR(50) NOT NULL DEFAULT 'FREE',
+    product_id VARCHAR(100),
+    is_pro BOOLEAN NOT NULL DEFAULT false,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    last_verified_at TIMESTAMP WITH TIME ZONE,
+    original_purchase_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS schedule_generation_usages (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    generation_type VARCHAR(50) NOT NULL DEFAULT 'STANDARD',
+    successful BOOLEAN NOT NULL DEFAULT false,
+    generated_sessions_count INT NOT NULL DEFAULT 0,
+    notes VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS course_materials (
     id BIGSERIAL PRIMARY KEY,
     course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -36,28 +62,7 @@ CREATE TABLE IF NOT EXISTS ai_usage_logs (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS schedule_generation_usages (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    generation_type VARCHAR(50) NOT NULL DEFAULT 'STANDARD',
-    successful BOOLEAN NOT NULL DEFAULT false,
-    generated_sessions_count INT NOT NULL DEFAULT 0,
-    notes VARCHAR(500),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- Ensure tasks_type_check includes all supported task types
+ALTER TABLE IF EXISTS tasks DROP CONSTRAINT IF EXISTS tasks_type_check;
+ALTER TABLE IF EXISTS tasks ADD CONSTRAINT tasks_type_check CHECK (type::text = ANY (ARRAY['ASSIGNMENT', 'HOMEWORK', 'QUIZ', 'MIDTERM', 'FINAL', 'EXAM', 'PROJECT', 'LAB', 'READING', 'OTHER']::text[]));
 
-CREATE TABLE IF NOT EXISTS user_subscriptions (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    entitlement VARCHAR(100) NOT NULL DEFAULT 'studyflow_pro',
-    status VARCHAR(50) NOT NULL DEFAULT 'FREE',
-    product_id VARCHAR(100),
-    is_pro BOOLEAN NOT NULL DEFAULT false,
-    expires_at TIMESTAMP WITH TIME ZONE,
-    last_verified_at TIMESTAMP WITH TIME ZONE,
-    original_purchase_date TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);

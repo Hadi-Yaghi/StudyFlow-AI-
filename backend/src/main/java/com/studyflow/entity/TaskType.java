@@ -8,5 +8,7 @@ public enum TaskType {
     PROJECT,
     LAB,
     HOMEWORK,
+    READING,
+    EXAM,
     OTHER
 }
